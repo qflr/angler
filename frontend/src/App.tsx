@@ -9,6 +9,7 @@ import { MetricCard } from './components/MetricCard';
 import { BehaviorCard, LocationCard, NoiseCard } from './components/Panels';
 import { ActorsCard, CveFocusCard, CveLeaderboard, EventStream } from './components/Tables';
 import { ActorDetail } from './components/ActorDetail';
+import { InsightCard } from './components/InsightCard';
 import { usingMock } from './data/api';
 import { HONEYPOT } from './data/config';
 import { hitsByCve, minuteSeries, stageBreakdown, topLocations } from './data/derive';
@@ -189,6 +190,12 @@ export default function App() {
               </Card>
             ) : (
               <>
+                <InsightCard
+                  key={activeTab}
+                  scope={activeTab === 'all' ? 'All traffic' : `${activeTab} honeypot`}
+                  events={scoped!.events}
+                  actors={scoped!.actors}
+                />
                 <MetricCard
                   title="Total hits"
                   help={`Every request the honeypot received, noise included. Last ${scoped!.stats.window ?? '24h'}. Sparkline: last 30 minutes.`}

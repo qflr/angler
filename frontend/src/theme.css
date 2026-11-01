@@ -1202,3 +1202,5 @@ ul.actor-mono { margin: 0; padding-left: 0; list-style: none; display: grid; gap
 .mode-toggle button span { font-weight: 400; font-size: 12px; opacity: 0.8; }
 .mode-toggle button.is-on { background: var(--angler-mauve); color: #fff; }
 .mode-toggle button:not(.is-on):hover { color: #fff; }
+
+.insight-text { white-space: pre-wrap; font-size: 13px; line-height: 1.55; color: var(--p-color-text); }
