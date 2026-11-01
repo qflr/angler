@@ -6,7 +6,6 @@ Recent KEV additions older than our feed window are backfilled so the urgent lis
 """
 
 import os
-import sqlite3
 from datetime import date, timedelta
 
 import httpx
@@ -29,7 +28,7 @@ def record_url(cve_id: str) -> str:
     return f"{cvelist.RAW}/cves/{year}/{int(num) // 1000}xxx/{cve_id}.json"
 
 
-def backfill_items(conn: sqlite3.Connection, catalog: dict[str, dict], days: int = BACKFILL_DAYS) -> list[dict]:
+def backfill_items(conn: db.Conn, catalog: dict[str, dict], days: int = BACKFILL_DAYS) -> list[dict]:
     cutoff = (date.today() - timedelta(days=days)).isoformat()
     have = {r["id"] for r in conn.execute("SELECT id FROM cves")}
     return [
@@ -39,7 +38,7 @@ def backfill_items(conn: sqlite3.Connection, catalog: dict[str, dict], days: int
     ]
 
 
-def apply(conn: sqlite3.Connection, catalog: dict[str, dict]) -> dict:
+def apply(conn: db.Conn, catalog: dict[str, dict]) -> dict:
     """Set kev flags on every tracked CVE. Returns counts."""
     checked_at = db.now_iso()
     counts = {"kev": 0, "newly_kev": 0}

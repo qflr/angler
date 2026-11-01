@@ -1,0 +1,65 @@
+# Angler backend Blueprint. Create with: Render Dashboard → New → Blueprint → repo qflr/angler,
+# Blueprint Path = backend/render.yaml. Everything lives in ohio so services share the private network.
+# The honeypot is deliberately NOT here; it gets its own service once exposure is approved.
+
+databases:
+  - name: angler-db
+    databaseName: angler
+    user: angler
+    region: ohio
+    plan: 0.1c-256mb
+
+services:
+  # Dashboard API (FastAPI). Serves the contract fixtures until ANGLER_DATA_SOURCE=db (Phase 3).
+  - type: web
+    name: angler-api
+    runtime: python
+    region: ohio
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DATABASE_URL
+        fromDatabase:
+          name: angler-db
+          property: connectionString
+      - key: ANGLER_DATA_SOURCE
+        value: fixture
+      - key: FRONTEND_ORIGINS
+        sync: false
+
+  # CVE ingestion + enrichment pipeline (Render Workflows). Tasks in app/pipeline.py.
+  - type: workflow
+    name: angler-pipeline
+    runtime: python
+    region: ohio
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python workflow.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DATABASE_URL
+        fromDatabase:
+          name: angler-db
+          property: connectionString
+
+  # Workflows has no scheduler; this starts angler-pipeline/refresh every 15 minutes.
+  - type: cron
+    name: angler-refresh
+    runtime: python
+    region: ohio
+    rootDir: backend
+    schedule: "*/15 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python trigger.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: ANGLER_WORKFLOW_SLUG
+        value: angler-pipeline
+      - key: RENDER_API_KEY
+        sync: false

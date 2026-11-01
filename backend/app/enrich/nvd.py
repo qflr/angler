@@ -5,7 +5,6 @@ NVD is the laggiest source (new CVEs often wait days for analysis) and rate-limi
 """
 
 import os
-import sqlite3
 import time
 
 import httpx
@@ -38,20 +37,20 @@ def parse(payload: dict) -> tuple[float, str] | None:
     return None
 
 
-def due(conn: sqlite3.Connection, limit: int) -> list[str]:
+def due(conn: db.Conn, limit: int) -> list[str]:
     rows = conn.execute(
         """SELECT id FROM cves
            WHERE state = 'PUBLISHED' AND cvss IS NULL
              AND (nvd_checked_at IS NULL
-                  OR nvd_checked_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?))
-           ORDER BY kev DESC, date_published DESC
+                  OR nvd_checked_at < ?)
+           ORDER BY COALESCE(kev, 0) DESC, COALESCE(date_published, '') DESC
            LIMIT ?""",
-        (f"-{RECHECK_HOURS} hours", limit),
+        (db.hours_ago(RECHECK_HOURS), limit),
     ).fetchall()
     return [r["id"] for r in rows]
 
 
-def run(conn: sqlite3.Connection, cve_ids: list[str]) -> dict:
+def run(conn: db.Conn, cve_ids: list[str]) -> dict:
     counts = {"checked": 0, "scored": 0, "errors": 0}
     headers = {**cvelist.HEADERS, **({"apiKey": NVD_API_KEY} if NVD_API_KEY else {})}
     with httpx.Client(timeout=cvelist.TIMEOUT, headers=headers) as client:

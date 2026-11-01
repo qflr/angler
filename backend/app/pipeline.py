@@ -65,7 +65,7 @@ def store_items(items: list[dict]) -> dict:
                 """INSERT INTO ingest_pending (cve_id, url, date_updated, feed_kind, attempts, last_error)
                    VALUES (?, ?, ?, ?, 1, ?)
                    ON CONFLICT (cve_id) DO UPDATE SET url = excluded.url, date_updated = excluded.date_updated,
-                       attempts = attempts + 1, last_error = excluded.last_error""",
+                       attempts = ingest_pending.attempts + 1, last_error = excluded.last_error""",
                 (item["cve_id"], item["url"], item["date_updated"], item["feed_kind"], error),
             )
     conn.close()

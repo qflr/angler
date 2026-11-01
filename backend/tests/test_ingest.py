@@ -135,3 +135,18 @@ def test_nvd_parse_prefers_primary():
         {"type": "Primary", "cvssData": {"baseScore": 9.8, "baseSeverity": "CRITICAL"}}]}}}]}
     assert nvd.parse(payload) == (9.8, "critical")
     assert nvd.parse({"vulnerabilities": [{"cve": {"metrics": {}}}]}) is None
+
+
+def test_pg_sql_translation():
+    assert db._pg_sql("UPDATE t SET a = :a, b = ? WHERE id = :id AND x LIKE '5%'") == (
+        "UPDATE t SET a = %(a)s, b = %s WHERE id = %(id)s AND x LIKE '5%%'"
+    )
+    assert db._pg_sql("SELECT x::text") == "SELECT x::text"
+
+
+def test_every_sql_statement_translates_cleanly():
+    """No sqlite-only functions slipped into the job SQL."""
+    import pathlib
+
+    src = "".join(p.read_text() for p in pathlib.Path("app").rglob("*.py") if p.name != "db.py")
+    assert "strftime(" not in src.replace("datetime", "").replace(".strftime(", "")

@@ -13,7 +13,6 @@ we never report "unpatched" just because we found nothing.
 
 import json
 import os
-import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
@@ -133,7 +132,7 @@ def check_many(rows: list[dict], workers: int = 16) -> list[tuple[str, Result, s
 RECHECK_HOURS = int(os.getenv("ANGLER_PATCH_RECHECK_HOURS", "6"))
 
 
-def due(conn: sqlite3.Connection, limit: int) -> list[dict]:
+def due(conn: db.Conn, limit: int) -> list[dict]:
     """CVEs never checked, changed since their last check, or not yet patched and due a recheck."""
     rows = conn.execute(
         """SELECT id, affected_json FROM cves
@@ -141,15 +140,15 @@ def due(conn: sqlite3.Connection, limit: int) -> list[dict]:
                patch_checked_at IS NULL
                OR last_changed_at > patch_checked_at
                OR (COALESCE(patch_status, '') != 'patched'
-                   AND patch_checked_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)))
-           ORDER BY kev DESC, date_published DESC
+                   AND patch_checked_at < ?))
+           ORDER BY COALESCE(kev, 0) DESC, COALESCE(date_published, '') DESC
            LIMIT ?""",
-        (f"-{RECHECK_HOURS} hours", limit),
+        (db.hours_ago(RECHECK_HOURS), limit),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def apply(conn: sqlite3.Connection, results: list[tuple[str, Result, str | None]]) -> dict:
+def apply(conn: db.Conn, results: list[tuple[str, Result, str | None]]) -> dict:
     """Store results. Logs 'patched' only on an observed unpatched/partial -> patched transition."""
     at = db.now_iso()
     counts = {"checked": 0, "patched": 0, "partial": 0, "unpatched": 0, "unknown": 0, "newly_patched": 0, "errors": 0}

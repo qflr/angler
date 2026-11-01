@@ -1,16 +1,19 @@
-"""SQLite storage for CVEs, their change log, and pipeline state.
+"""Storage for CVEs, their change log, and pipeline state.
 
-Plain sqlite3 so it runs anywhere. Note for deploy: Workflows task runs each get their own
-compute, so a shared SQLite file only works locally. Deployed runs need Postgres (DATABASE_URL).
+Postgres when DATABASE_URL is set (Render: every Workflows task runs on its own compute, so they
+need a shared database), otherwise a local SQLite file. Both sit behind Conn, and all SQL here and
+in the jobs is written to run on both: ? and :name params, no dialect-specific functions.
 """
 
 import hashlib
 import json
 import os
+import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+DATABASE_URL = os.getenv("DATABASE_URL")
 DB_PATH = Path(os.getenv("ANGLER_DB", Path(__file__).resolve().parents[1] / "angler.db"))
 
 SCHEMA = """
@@ -93,25 +96,84 @@ LATE_COLUMNS = {
 }
 
 
-def connect(path: Path | str | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(path or DB_PATH, timeout=30)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.executescript(SCHEMA)
+_NAMED_PARAM = re.compile(r"(?<![:\w]):(\w+)")
+_SCHEMA_LOCK = 4242  # pg advisory lock id: parallel tasks may all create the schema at once
+
+
+def _pg_sql(sql: str) -> str:
+    sql = sql.replace("%", "%%").replace("?", "%s")
+    return _NAMED_PARAM.sub(r"%(\1)s", sql)
+
+
+class Conn:
+    """One interface over sqlite3 and psycopg. `with conn:` is a transaction (commit or rollback)."""
+
+    def __init__(self, raw, pg: bool):
+        self.raw = raw
+        self.pg = pg
+
+    def execute(self, sql: str, params=()):
+        return self.raw.execute(_pg_sql(sql) if self.pg else sql, params)
+
+    def commit(self) -> None:
+        self.raw.commit()
+
+    def close(self) -> None:
+        self.raw.close()
+
+    def __enter__(self) -> "Conn":
+        return self
+
+    def __exit__(self, exc_type, *_) -> None:
+        if exc_type:
+            self.raw.rollback()
+        else:
+            self.raw.commit()
+
+
+def _connect_pg() -> Conn:
+    import psycopg
+    from psycopg.rows import dict_row
+
+    raw = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    raw.execute("SELECT pg_advisory_lock(%s)", (_SCHEMA_LOCK,))
+    raw.execute(SCHEMA.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY"))
     for table, cols in LATE_COLUMNS.items():
-        have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for name, decl in cols.items():
+            raw.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {name} {decl}")
+    raw.execute("SELECT pg_advisory_unlock(%s)", (_SCHEMA_LOCK,))
+    raw.commit()
+    return Conn(raw, pg=True)
+
+
+def connect(path: Path | str | None = None) -> Conn:
+    """Postgres if DATABASE_URL is set and no explicit SQLite path is given, else SQLite."""
+    if DATABASE_URL and path is None:
+        return _connect_pg()
+    raw = sqlite3.connect(path or DB_PATH, timeout=30)
+    raw.row_factory = sqlite3.Row
+    raw.execute("PRAGMA journal_mode=WAL")
+    raw.executescript(SCHEMA)
+    for table, cols in LATE_COLUMNS.items():
+        have = {r["name"] for r in raw.execute(f"PRAGMA table_info({table})")}
         for name, decl in cols.items():
             if name not in have:
-                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
-    return conn
+                raw.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+    raw.commit()
+    return Conn(raw, pg=False)
 
 
-def get_state(conn: sqlite3.Connection, key: str) -> str | None:
+def hours_ago(hours: float) -> str:
+    """Cutoff in the same format as now_iso(), for portable time-window queries."""
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def get_state(conn: Conn, key: str) -> str | None:
     row = conn.execute("SELECT value FROM state WHERE key = ?", (key,)).fetchone()
     return row["value"] if row else None
 
 
-def set_state(conn: sqlite3.Connection, key: str, value: str) -> None:
+def set_state(conn: Conn, key: str, value: str) -> None:
     conn.execute(
         "INSERT INTO state (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
         (key, value),
@@ -122,7 +184,7 @@ def record_hash(raw: dict) -> str:
     return hashlib.sha256(json.dumps(raw, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def upsert_cve(conn: sqlite3.Connection, cve: dict, feed_kind: str, at: str | None = None) -> str:
+def upsert_cve(conn: Conn, cve: dict, feed_kind: str, at: str | None = None) -> str:
     """Store one parsed CVE. Returns new | updated | unchanged | stale | backfilled.
 
     feed_kind "backfill" stores a CVE we pulled in for context (e.g. a recent KEV entry older than
