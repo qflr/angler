@@ -1,11 +1,12 @@
 """Angler API: serves the dashboard contract in docs/api-contract.md."""
 
+import json
 import os
 
-from fastapi import FastAPI, Query, Response
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import fixtures
+from . import db, fixtures
 from .schemas import Actor, AttackEvent, Cve, Stats
 
 # "fixture" serves the contract examples (Phase 0). "db" will read real pipeline data (Phase 3).
@@ -44,7 +45,28 @@ def healthz():
     return {"ok": True}
 
 
-@app.get("/api/cves", response_model=list[Cve], response_model_exclude_none=True)
+@app.get("/status")
+def pipeline_status():
+    """Read-only pipeline health: is the DB reachable, how much is in it, when did ingest last run."""
+    conn = db.connect()
+    try:
+        last = conn.execute(
+            "SELECT started_at, finished_at, since, cursor, counts_json FROM ingest_runs ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return {
+            "database": "postgres" if conn.pg else "sqlite",
+            "cves": conn.execute("SELECT COUNT(*) AS n FROM cves").fetchone()["n"],
+            "kev": conn.execute("SELECT COUNT(*) AS n FROM cves WHERE kev = 1").fetchone()["n"],
+            "patch_checked": conn.execute("SELECT COUNT(*) AS n FROM cves WHERE patch_checked_at IS NOT NULL").fetchone()["n"],
+            "pending": conn.execute("SELECT COUNT(*) AS n FROM ingest_pending").fetchone()["n"],
+            "ingest_runs": conn.execute("SELECT COUNT(*) AS n FROM ingest_runs").fetchone()["n"],
+            "last_run": {**dict(last), "counts": json.loads(last["counts_json"])} if last else None,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/cves",response_model=list[Cve], response_model_exclude_none=True)
 def list_cves():
     return fixtures.CVES
 
