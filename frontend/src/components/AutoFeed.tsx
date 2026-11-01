@@ -16,10 +16,6 @@ interface FeedItem {
 const FEED: FeedItem[] = [
   { id: 'CVE-2024-6767', product: 'WordSurvey (WordPress plugin)', flaw: 'Stored XSS', cvss: 5.5, verdict: 'Needs an admin login. No mass exploitation.' },
   { id: 'CVE-2025-6767', product: 'hosp_order', flaw: 'SQL injection', cvss: 6.3, verdict: 'Hobby project, almost no internet exposure.' },
-  { id: 'CVE-2024-6387', product: 'OpenSSH (regreSSHion)', flaw: 'Race-condition RCE', cvss: 8.1, verdict: 'SSH, not HTTP, and takes hours per target. Watchlist.' },
-  { id: 'CVE-2024-3094', product: 'xz Utils', flaw: 'Supply-chain backdoor', cvss: 10.0, verdict: 'Nothing reachable to scan for. Not decoy-able.' },
-  { id: 'CVE-2024-38063', product: 'Windows TCP/IP (IPv6)', flaw: 'Kernel RCE', cvss: 9.8, verdict: 'Kernel network stack; cannot be impersonated safely.' },
-  { id: 'CVE-2024-23897', product: 'Jenkins', flaw: 'CLI arbitrary file read', cvss: 9.8, kev: true, verdict: 'KEV, but mostly patched. Queued next.' },
   {
     id: 'CVE-2024-3400',
     product: 'Palo Alto PAN-OS GlobalProtect',
@@ -29,6 +25,10 @@ const FEED: FeedItem[] = [
     verdict: 'Unauthenticated RCE · in CISA KEV · internet-facing VPN · mass-scanned. Building a decoy.',
     pick: true,
   },
+  { id: 'CVE-2024-6387', product: 'OpenSSH (regreSSHion)', flaw: 'Race-condition RCE', cvss: 8.1, verdict: 'SSH, not HTTP, and takes hours per target. Watchlist.' },
+  { id: 'CVE-2024-3094', product: 'xz Utils', flaw: 'Supply-chain backdoor', cvss: 10.0, verdict: 'Nothing reachable to scan for. Not decoy-able.' },
+  { id: 'CVE-2024-38063', product: 'Windows TCP/IP (IPv6)', flaw: 'Kernel RCE', cvss: 9.8, verdict: 'Kernel network stack; cannot be impersonated safely.' },
+  { id: 'CVE-2024-23897', product: 'Jenkins', flaw: 'CLI arbitrary file read', cvss: 9.8, kev: true, verdict: 'KEV, but mostly patched. Queued next.' },
 ];
 
 type Phase = 'idle' | 'pulling' | 'triage' | 'picked';
