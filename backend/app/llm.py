@@ -20,7 +20,8 @@ PROJECT = os.getenv("ANGLER_GCP_PROJECT", "project-6697f472-fcf5-402d-a67")
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 LOCATION = os.getenv("GEMINI_LOCATION", "global")
 
-_PATH = re.compile(r"^/[A-Za-z0-9._~!$&'()*+,;=:@%/-]{0,119}$")
+# Scanner paths often carry a query string, so "?" is allowed; still no "..", spaces or control characters.
+_PATH = re.compile(r"^/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]{0,159}$")
 _TYPES = {"text/plain", "text/html", "application/json"}
 
 
