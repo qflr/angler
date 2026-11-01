@@ -62,6 +62,13 @@ export function EventStream({ events, now }: { events: AttackEvent[]; now: numbe
         resourceName={{ singular: 'hit', plural: 'hits' }}
         itemCount={rows.length}
         selectable={false}
+        emptyState={
+          <Box padding="400">
+            <Text as="p" tone="subdued">
+              No CVE-specific attacks yet. Everything so far is background scanning.
+            </Text>
+          </Box>
+        }
         headings={[{ title: 'Time' }, { title: 'Source' }, { title: 'Port' }, { title: 'Request' }, { title: 'Class' }]}
       >
         {rows.map((e, i) => {
@@ -118,7 +125,10 @@ export function EventStream({ events, now }: { events: AttackEvent[]; now: numbe
 
 export function CveLeaderboard({ cves, hits }: { cves: Cve[]; hits: ReturnType<typeof hitsByCve> }) {
   const byId = new Map(cves.map((c) => [c.id, c]));
-  const rows = ANALYZABLE.map((known) => ({ ...known, cve: byId.get(known.id) })).sort(
+  // Only CVEs that actually drew traffic; a list of everything we could recognise is noise.
+  const rows = ANALYZABLE.filter((known) => (hits.get(known.id)?.hits ?? 0) > 0)
+    .map((known) => ({ ...known, cve: byId.get(known.id) }))
+    .sort(
     (a, b) =>
       (hits.get(b.id)?.targeted ?? 0) - (hits.get(a.id)?.targeted ?? 0) ||
       (a.cve ? STATUS_RANK[a.cve.status] : 9) - (b.cve ? STATUS_RANK[b.cve.status] : 9),

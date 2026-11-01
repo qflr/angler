@@ -43,7 +43,8 @@ export default function App() {
   const [showNoise, setShowNoise] = useState(true);
   const [autoRotate, setAutoRotate] = useState(true);
   // 'all' or the CVE ID of a published honeypot.
-  const [tab, setTab] = useState<string>('all');
+  // null = not chosen yet: show the most recently published honeypot, the CVE the user just built.
+  const [tab, setTab] = useState<string | null>(null);
   const [openActor, setOpenActor] = useState<Actor | null>(null);
 
   const now = updatedAt ?? Date.now();
@@ -51,7 +52,8 @@ export default function App() {
 
   // One published honeypot = one tab; everything below reads `scoped` so the tab filters every panel.
   const tabs = data?.honeypots ?? [];
-  const activeTab = tab !== 'all' && tabs.some((h) => h.cve_id === tab) ? tab : 'all';
+  const chosen = tab ?? tabs[0]?.cve_id ?? 'all';
+  const activeTab = chosen !== 'all' && tabs.some((h) => h.cve_id === chosen) ? chosen : 'all';
   const scoped = useMemo(() => {
     if (!data || activeTab === 'all') return data;
     const events = data.events.filter((e) => e.cve_id === activeTab);
