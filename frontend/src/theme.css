@@ -1208,7 +1208,8 @@ ul.actor-mono { margin: 0; padding-left: 0; list-style: none; display: grid; gap
 /* Demo auto mode: scripted CVE feed and triage. */
 .auto-feed { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .auto-feed.is-running { display: block; }
-.auto-btn { background: transparent; border: 1px solid rgba(255, 255, 255, 0.35); }
+.auto-btn { background: transparent; border-color: rgba(255, 255, 255, 0.6); color: #ffffff; box-shadow: none; }
+.auto-btn:hover { background: var(--angler-lilac); border-color: var(--angler-lilac); color: var(--angler-ink); }
 .auto-hint { font-size: 13px; color: var(--angler-gray); }
 .auto-status { margin: 0 0 10px; font-size: 13px; color: var(--angler-gray); }
 .auto-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
