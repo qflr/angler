@@ -788,7 +788,7 @@ h3.eyebrow, p.metric-value { margin: 0; }
 }
 
 .flow-stage {
-  width: min(960px, 100%);
+  width: min(640px, 100%);
   margin-top: clamp(32px, 9vh, 96px);
   display: flex;
   align-items: flex-start;
