@@ -8,8 +8,12 @@ import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 import httpx
+
+SA_FILE = Path(__file__).resolve().parents[1] / ".gemini_sa.json"
+SCOPES = ["https://www.googleapis.com/auth/cloud-platform"]
 
 # This machine's GOOGLE_CLOUD_PROJECT is a different, unbilled project. Angler bills the decoy project.
 PROJECT = os.getenv("ANGLER_GCP_PROJECT", "project-6697f472-fcf5-402d-a67")
@@ -24,8 +28,26 @@ class ProfileError(Exception):
     """Gemini did not return a usable profile. The job stays failed."""
 
 
+def _service_account_token() -> str | None:
+    """A service-account key does not expire. Render sets GEMINI_SA_JSON; locally the file is enough."""
+    raw = os.getenv("GEMINI_SA_JSON", "").strip()
+    if not raw and SA_FILE.exists() and SA_FILE.stat().st_size > 0:
+        raw = SA_FILE.read_text(encoding="utf-8")
+    if not raw:
+        return None
+    from google.oauth2 import service_account
+    from google.auth.transport.requests import Request
+
+    creds = service_account.Credentials.from_service_account_info(json.loads(raw), scopes=SCOPES)
+    creds.refresh(Request())
+    return creds.token
+
+
 def access_token() -> str:
-    """Render sets GEMINI_ACCESS_TOKEN. A developer machine can use gcloud instead."""
+    """Prefer the service-account key. GEMINI_ACCESS_TOKEN is an hour-long fallback."""
+    sa = _service_account_token()
+    if sa:
+        return sa
     env = os.getenv("GEMINI_ACCESS_TOKEN", "").strip()
     if env:
         return env
