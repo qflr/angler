@@ -22,8 +22,11 @@ from .schemas import Actor, AttackEvent, Cve, Stats
 # Shared secret the honeypot sensor sends in X-Ingest-Key. Unset = ingest disabled.
 INGEST_KEY = os.getenv("INGEST_KEY", "")
 
-# Comma-separated extra origins, e.g. the frontend's Render static-site URL once it exists.
-FRONTEND_ORIGINS = [o.strip().rstrip("/") for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()]
+# The deployed dashboard, plus any extra origins in FRONTEND_ORIGINS (comma-separated).
+_DASHBOARD = "https://angler-gmip.onrender.com"
+FRONTEND_ORIGINS = list(dict.fromkeys(
+    [_DASHBOARD] + [o.strip().rstrip("/") for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()]
+))
 
 app = FastAPI(title="Angler API", version="0.3.0")
 
