@@ -3,3 +3,6 @@
 *.db-wal
 *.db-shm
 .ingest_key
+.gemini_key
+.gemini_sa.json
+.gemini_key_create.json

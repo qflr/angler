@@ -1071,12 +1071,20 @@ h3.eyebrow, p.metric-value { margin: 0; }
 .is-active .pipe-status {
   color: #f6f3f6;
 }
+.is-failed .pipe-status {
+  color: #ffb4a8;
+}
+.is-failed .pipe-node {
+  border-color: #ffb4a8;
+  color: #ffb4a8;
+}
 
 .pipe-detail {
   margin: 4px 0 0;
   font-size: 13px;
   color: var(--angler-frost);
   opacity: 0.85;
+  white-space: pre-wrap;
 }
 .is-pending .pipe-detail {
   opacity: 0.45;

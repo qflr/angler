@@ -70,6 +70,11 @@ const STEPS: Step[] = [
 ];
 
 function stepState(step: Step, job: HoneypotJob) {
+  if (job.status === 'failed') {
+    if (step.key === 'research') return job.advisory ? 'done' : 'pending';
+    if (step.key === 'build') return 'failed';
+    return 'pending';
+  }
   const at = ORDER.indexOf(job.status);
   const mine = ORDER.indexOf(step.activeAt);
   // The exploit step only runs after publishing, and resolves immediately in this view.
@@ -263,16 +268,16 @@ export function NewHoneypot({ onViewDashboard }: { onViewDashboard: () => void }
               return (
                 <li key={step.key} className={`pipe-step is-${state}`}>
                   <span className="pipe-node" aria-hidden>
-                    {state === 'done' ? '✓' : state === 'active' ? <span className="spinner" /> : null}
+                    {state === 'done' ? '✓' : state === 'failed' ? '!' : state === 'active' ? <span className="spinner" /> : null}
                   </span>
                   <div className="pipe-body">
                     <div className="pipe-head">
                       <span className="pipe-title">{step.title}</span>
                       <span className="pipe-status">
-                        {state === 'done' ? 'Done' : state === 'active' ? `${step.working}…` : 'Waiting'}
+                        {state === 'failed' ? 'Failed' : state === 'done' ? 'Done' : state === 'active' ? `${step.working}…` : 'Waiting'}
                       </span>
                     </div>
-                    <p className="pipe-detail">{state === 'done' ? step.done(job) : step.blurb}</p>
+                    <p className="pipe-detail">{state === 'failed' ? job.error || 'Failed' : state === 'done' ? step.done(job) : step.blurb}</p>
                   </div>
                 </li>
               );

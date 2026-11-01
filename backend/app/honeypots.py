@@ -3,8 +3,7 @@
 Each stage is real work, and a job that can't honestly finish fails with the reason:
 
     researching  load the CVE record (pull it from cvelistV5 if we don't track it) + KEV + patch status
-    building     pick the decoy profile that answers this CVE's probes; none yet -> failed
-                 (generating new profiles is the LLM build agent, Phase 6)
+    building     prebuilt CVEs continue; any other CVE gets a Gemini profile and stays failed
     containing   health-check the sandboxed decoy: it answers with the vulnerable banner
     ready        waits for the user to publish
     published    returns the live decoy URL; hits for this CVE are tagged targeted
@@ -125,16 +124,32 @@ def research(job_id: str, cve_id: str) -> dict | None:
     return advisory
 
 
+def _advisory_text(job_id: str) -> str:
+    conn = db.connect()
+    try:
+        row = _row(conn, job_id)
+    finally:
+        conn.close()
+    if not row or not row["advisory_json"]:
+        return ""
+    advisory = json.loads(row["advisory_json"])
+    return f"{advisory.get('product') or ''} {advisory.get('description') or ''}".strip()
+
+
 def build(job_id: str, cve_id: str) -> bool:
-    if cve_id not in classify.DECOY_CVES:
-        fail(
-            job_id,
-            f"No decoy profile answers {cve_id} yet. Live profiles: {', '.join(sorted(classify.DECOY_CVES))}. "
-            "Generating new profiles is the LLM build agent (not live yet).",
-        )
+    """Prebuilt CVEs move on to the live decoy. Anything else gets a Gemini profile and stays failed."""
+    if cve_id in classify.DECOY_CVES:
+        _set(job_id, status="containing")
+        return True
+    from . import llm
+
+    try:
+        profile = llm.propose(cve_id, _advisory_text(job_id))
+    except llm.ProfileError as e:
+        fail(job_id, str(e))
         return False
-    _set(job_id, status="containing")
-    return True
+    fail(job_id, llm.render(cve_id, profile))
+    return False
 
 
 def contain(job_id: str) -> bool:

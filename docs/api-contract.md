@@ -165,7 +165,8 @@ Attacker dossiers: multiple IPs collapsed into one actor using shared fingerprin
 *Proposed by the frontend; **live on the backend since Nov 1** (shape unchanged), so the frontend
 simulation in `frontend/src/data/honeypot.ts` is no longer needed. Each stage is real: research pulls
 the CVE record + KEV + patch status, build picks a decoy profile, contain health-checks the sandboxed
-decoy. CVEs without a decoy profile end in `failed` with the reason in `error`; live profiles today:
+decoy. CVEs without a prebuilt profile end in `failed`. `error` then holds a Gemini-proposed
+profile (paths and static responses only). That profile is not installed on the decoy. Live profiles today:
 CVE-2023-1389, CVE-2017-9841, CVE-2021-41773, CVE-2024-4577. `url` is the real decoy
 (`http://34.72.134.92/`). CORS now allows POST from the frontend origins.*
 
