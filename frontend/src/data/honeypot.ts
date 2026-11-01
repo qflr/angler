@@ -36,7 +36,35 @@ const STAGE_END: [HoneypotStatus, number][] = [
   ['containing', 10500],
 ];
 
-const mockJobs = new Map<string, { job: HoneypotJob; started: number }>();
+type Advisory = NonNullable<HoneypotJob['advisory']>;
+const mockJobs = new Map<string, { job: HoneypotJob; started: number; advisory?: Advisory }>();
+
+// Demo traffic is simulated, but the advisory is real: the public cvelistV5 record (CORS-open).
+async function realAdvisory(cveId: string): Promise<Advisory | null> {
+  const [, year, num] = cveId.split('-');
+  const url = `https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/${year}/${Math.floor(Number(num) / 1000)}xxx/${cveId}.json`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const rec = await res.json();
+    const cna = rec.containers?.cna ?? {};
+    const adp: { metrics?: Record<string, { baseScore?: number }>[] }[] = rec.containers?.adp ?? [];
+    const affected = (cna.affected ?? []).find((a: { product?: string }) => a.product && a.product.toLowerCase() !== 'n/a');
+    const vendor = affected?.vendor && affected.vendor.toLowerCase() !== 'n/a' ? affected.vendor : '';
+    const product = affected ? (affected.product.toLowerCase().startsWith(vendor.toLowerCase()) ? affected.product : `${vendor} ${affected.product}`.trim()) : null;
+    const desc: string = cna.title || (cna.descriptions ?? []).find((d: { lang?: string }) => d.lang?.startsWith('en'))?.value || '';
+    let cvss: number | null = null;
+    for (const m of [...(cna.metrics ?? []), ...adp.flatMap((a) => a.metrics ?? [])]) {
+      for (const key of ['cvssV4_0', 'cvssV3_1', 'cvssV3_0']) {
+        const score = (m as Record<string, { baseScore?: number }>)[key]?.baseScore;
+        if (cvss == null && typeof score === 'number') cvss = score;
+      }
+    }
+    return { description: desc.split(/(?<=[.!?])\s+/)[0].slice(0, 240), product, cvss, kev: false };
+  } catch {
+    return null;
+  }
+}
 
 function mockStatus(started: number): HoneypotStatus {
   const elapsed = Date.now() - started;
@@ -58,11 +86,11 @@ function mockView(id: string): HoneypotJob {
         ? null
         : known
           ? { description: known.description, product: known.product, cvss: known.cvss, kev: known.kev }
-          : demoAdvisory(job.cve_id),
+          : entry.advisory ?? demoAdvisory(job.cve_id),
   };
 }
 
-// Demo mode: a plausible advisory for any CVE, stable per ID.
+// Fallback only, for IDs cvelistV5 doesn't have (made-up or reserved): a plausible advisory, stable per ID.
 const DEMO_PRODUCTS = [
   ['Ivanti Connect Secure', 'authentication bypass leading to remote command execution'],
   ['Fortinet FortiOS SSL-VPN', 'heap overflow allowing unauthenticated code execution'],
@@ -93,7 +121,15 @@ export async function createHoneypot(cveId: string): Promise<HoneypotJob> {
     }
   }
   const id = `hp_sim_${Date.now().toString(36)}`;
-  mockJobs.set(id, { job: { id, cve_id: cveId, status: 'researching' }, started: Date.now() });
+  const entry: { job: HoneypotJob; started: number; advisory?: Advisory } = {
+    job: { id, cve_id: cveId, status: 'researching' },
+    started: Date.now(),
+  };
+  mockJobs.set(id, entry);
+  // Research runs for a few seconds in the simulation; the real record arrives well within that.
+  realAdvisory(cveId).then((a) => {
+    if (a) entry.advisory = a;
+  });
   return mockView(id);
 }
 

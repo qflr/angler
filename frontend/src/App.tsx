@@ -7,7 +7,7 @@ import { NewHoneypot } from './components/NewHoneypot';
 import { SiteFooter } from './components/SiteFooter';
 import { MetricCard } from './components/MetricCard';
 import { BehaviorCard, LocationCard, NoiseCard } from './components/Panels';
-import { ActorsCard, CveLeaderboard, EventStream } from './components/Tables';
+import { ActorsCard, CveFocusCard, CveLeaderboard, EventStream } from './components/Tables';
 import { ActorDetail } from './components/ActorDetail';
 import { usingMock } from './data/api';
 import { HONEYPOT } from './data/config';
@@ -218,7 +218,17 @@ export default function App() {
                 </InlineGrid>
                 <NoiseCard series={derived.series} />
                 <EventStream events={events} now={now} />
-                <CveLeaderboard cves={scoped!.cves} hits={derived.cveHits} />
+                {/* The leaderboard ranks every recognised CVE, so it only belongs on "All traffic". */}
+                {activeTab === 'all' ? (
+                  <CveLeaderboard cves={scoped!.cves} hits={derived.cveHits} />
+                ) : (
+                  <CveFocusCard
+                    cveId={activeTab}
+                    cve={scoped!.cves[0]}
+                    fallback={tabs.find((h) => h.cve_id === activeTab)?.advisory}
+                    hits={derived.cveHits.get(activeTab)}
+                  />
+                )}
                 <ActorsCard actors={scoped!.actors} now={now} onSelect={setOpenActor} />
                 {derived.stages.any && <BehaviorCard breakdown={derived.stages} />}
                 {derived.locations.length > 0 && <LocationCard locations={derived.locations} />}

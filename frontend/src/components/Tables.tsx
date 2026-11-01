@@ -282,3 +282,51 @@ export function ActorsCard({ actors, now, onSelect }: { actors: Actor[]; now: nu
     </Card>
   );
 }
+
+/** On a single-CVE tab: what this vulnerability is and what the decoy has seen for it. */
+export function CveFocusCard({
+  cveId,
+  cve,
+  fallback,
+  hits,
+}: {
+  cveId: string;
+  cve?: Cve;
+  fallback?: { description?: string | null; product?: string | null; cvss?: number | null; kev?: boolean | null } | null;
+  hits?: { hits: number; targeted: number };
+}) {
+  const description = cve?.description ?? fallback?.description ?? 'No advisory text yet.';
+  const product = cve?.product ?? fallback?.product;
+  const cvss = cve?.cvss ?? fallback?.cvss;
+  const kev = cve?.kev ?? fallback?.kev;
+  return (
+    <Card>
+      <BlockStack gap="300">
+        <CardTitle help="The vulnerability this honeypot impersonates, from the CVE record, CISA KEV and OSV, plus the hits it has drawn.">
+          This CVE
+        </CardTitle>
+        <InlineStack gap="150" blockAlign="center" wrap>
+          <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>
+            {cveId}
+          </span>
+          {kev && <Pill tone="strong">KEV</Pill>}
+          {cve && <Pill tone={STATUS_TONE[cve.status] ?? 'outline'}>{cap(cve.status)}</Pill>}
+          {cve && <Pill tone={SEVERITY_TONE[cve.severity] ?? 'outline'}>{cvss != null ? `CVSS ${cvss.toFixed(1)}` : cap(cve.severity)}</Pill>}
+          {!cve && cvss != null && <Pill tone="mid">CVSS {cvss.toFixed(1)}</Pill>}
+          {cve && <Pill tone={PATCH_TONE[cve.patch_status] ?? 'outline'}>{cap(cve.patch_status)}</Pill>}
+        </InlineStack>
+        {product && (
+          <Text as="p" variant="headingSm">
+            {product}
+          </Text>
+        )}
+        <Text as="p" variant="bodySm" tone="subdued">
+          {description}
+        </Text>
+        <Text as="p" variant="bodyMd">
+          <strong>{hits?.targeted ?? 0}</strong> targeted · <strong>{hits?.hits ?? 0}</strong> total requests attributed to this CVE
+        </Text>
+      </BlockStack>
+    </Card>
+  );
+}

@@ -391,16 +391,18 @@ export function addDemoHoneypot(job: HoneypotJob) {
     for (const a of ACTORS) if (a.cves.length && !a.cves.includes(job.cve_id)) a.cves.push(job.cve_id);
     return;
   }
+  const cvss = job.advisory?.cvss ?? null;
   const slug = job.cve_id.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   CVES.push({
     id: job.cve_id,
     description: job.advisory?.description ?? `${job.cve_id} remote code execution`,
     product: job.advisory?.product ?? 'Unknown product',
-    severity: 'critical',
-    cvss: job.advisory?.cvss ?? 9.8,
-    status: job.advisory?.kev ? 'urgent' : 'high',
+    // Bands follow the real CVSS from the advisory; we don't know patch state in demo, so say so.
+    severity: cvss == null ? 'unknown' : cvss >= 9 ? 'critical' : cvss >= 7 ? 'high' : cvss >= 4 ? 'medium' : 'low',
+    cvss,
+    status: job.advisory?.kev ? 'urgent' : (cvss ?? 0) >= 9 ? 'high' : 'watch',
     kev: !!job.advisory?.kev,
-    patch_status: 'unpatched',
+    patch_status: 'unknown',
     published: new Date().toISOString(),
     port: 443,
     probe: { method: 'GET', path: `/api/v1/version?probe=${slug}` },
