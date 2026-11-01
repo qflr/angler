@@ -79,6 +79,19 @@ Test gate (live, Nov 1): CVE-2024-3400, -4577, -23897, CVE-2021-44228 all flagge
 from its record (PAN-OS 10.2.9-h1 / 11.0.4-h1 / 11.1.2-h3), 4577 and 23897 patched via OSV/GHSA;
 731/883 tracked CVEs patched, 137 unknown. NVD had no score yet for any of the 28 unscored CVEs.
 
+## Honeypot (Phase 4)
+
+`honeypot/sensor.py` is a low-interaction decoy (stdlib only): it answers like a Windows XAMPP box
+(Apache 2.4.58 + PHP 8.2.12, the CVE-2024-4577 target), logs every request, and never executes
+anything it receives. Hits ship in batches to `POST /ingest/events` (header `X-Ingest-Key`), spooling
+locally if the API is down. The API classifies each hit (`app/classify.py`: targeted = carries a
+CVE-2024-4577 probe/exploit, else noise; stage recon/probe/exploit), adds geo/ASN (`app/geoip.py`,
+ip-api.com, cached per IP), and hides test traffic (header `X-Angler-Test: 1`, or any non-public source IP).
+
+VM install: copy `honeypot/` to the VM, then `sudo INGEST_KEY=... bash install.sh`. It runs as an
+unprivileged systemd service that can bind 80/443 and write only `/var/lib/angler`.
+Local test (loopback only): `python honeypot/sensor.py --host 127.0.0.1 --port 8080`.
+
 ## Render Workflows notes (confirmed against render.com/docs/workflows, Nov 2026)
 
 - Package `render>=1.0.1`; `from render import TaskContext, Workflows, Retry`; `app = Workflows()`; `@app.task`.

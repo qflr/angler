@@ -28,6 +28,9 @@ services:
           property: connectionString
       - key: FRONTEND_ORIGINS
         sync: false
+      # Shared secret for POST /ingest/events from the honeypot sensor (set in the dashboard).
+      - key: INGEST_KEY
+        sync: false
 
   # CVE ingestion + enrichment pipeline (Render Workflows). Tasks in app/pipeline.py.
   - type: workflow

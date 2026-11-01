@@ -101,6 +101,22 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_timestamp ON events (timestamp);
 
+-- Geo/ASN per attacker IP, looked up once (app/geoip.py).
+CREATE TABLE IF NOT EXISTS ip_info (
+    ip           TEXT PRIMARY KEY,
+    asn          INTEGER,
+    org          TEXT,
+    country      TEXT,
+    country_code TEXT,
+    region       TEXT,
+    city         TEXT,
+    lat          REAL,
+    lng          REAL,
+    hosting      INTEGER,
+    proxy        INTEGER,
+    looked_up_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS state (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL

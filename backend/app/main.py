@@ -10,11 +10,17 @@ import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException, Query
+import hmac
+import ipaddress
+
+from fastapi import Body, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import db, triage
+from . import classify, db, geoip, triage
 from .schemas import Actor, AttackEvent, Cve, Stats
+
+# Shared secret the honeypot sensor sends in X-Ingest-Key. Unset = ingest disabled.
+INGEST_KEY = os.getenv("INGEST_KEY", "")
 
 # Comma-separated extra origins, e.g. the frontend's Render static-site URL once it exists.
 FRONTEND_ORIGINS = [o.strip().rstrip("/") for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()]
@@ -25,7 +31,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=FRONTEND_ORIGINS,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
-    allow_methods=["GET"],
+    allow_methods=["GET"],  # the sensor's POST is server-to-server, no CORS needed
     allow_headers=["*"],
     expose_headers=["X-Angler-Data-Source"],
 )
@@ -195,3 +201,55 @@ def list_actors():
         )
     actors.sort(key=lambda a: a["last_seen"], reverse=True)
     return actors
+
+
+@app.post("/ingest/events")
+def ingest_events(hits: list[dict] = Body(...), x_ingest_key: str = Header("")):
+    """Raw hits from the honeypot sensor: classify, attribute, store. Idempotent on hit id."""
+    if not INGEST_KEY or not hmac.compare_digest(x_ingest_key, INGEST_KEY):
+        raise HTTPException(401, "bad ingest key")
+    if len(hits) > 500:
+        raise HTTPException(413, "max 500 hits per batch")
+
+    conn = db.connect()
+    try:
+        for h in hits:
+            # Loopback/private sources can't be internet attackers: our own tests or health checks.
+            try:
+                if not ipaddress.ip_address(h["source_ip"]).is_global:
+                    h["is_test"] = True
+            except ValueError:
+                h["is_test"] = True
+        geo = geoip.lookup(conn, [h["source_ip"] for h in hits if not h.get("is_test")])
+        stored = 0
+        with conn:
+            for h in hits:
+                verdict = classify.classify(h.get("method", ""), h.get("path", ""), h.get("body_preview", ""), h.get("headers"))
+                g = geo.get(h["source_ip"], {})
+                cur = conn.execute(
+                    """INSERT INTO events (id, source_ip, asn, port, timestamp, classification, org, country,
+                           country_code, region, city, lat, lng, cve_id, method, path, stage, user_agent,
+                           headers_json, body_preview, is_test)
+                       VALUES (:id, :source_ip, :asn, :port, :timestamp, :classification, :org, :country,
+                           :country_code, :region, :city, :lat, :lng, :cve_id, :method, :path, :stage, :user_agent,
+                           :headers_json, :body_preview, :is_test)
+                       ON CONFLICT (id) DO NOTHING""",
+                    {
+                        "id": str(h["id"])[:64],
+                        "source_ip": str(h["source_ip"])[:64],
+                        "port": int(h["port"]),
+                        "timestamp": str(h["timestamp"])[:32],
+                        "method": str(h.get("method", ""))[:16],
+                        "path": str(h.get("path", ""))[:2048],
+                        "user_agent": str(h.get("user_agent", ""))[:512],
+                        "headers_json": json.dumps(h.get("headers") or {})[:8192],
+                        "body_preview": str(h.get("body_preview", ""))[:4096],
+                        "is_test": 1 if h.get("is_test") else 0,
+                        **verdict,
+                        **{k: g.get(k) for k in ("asn", "org", "country", "country_code", "region", "city", "lat", "lng")},
+                    },
+                )
+                stored += max(cur.rowcount, 0)
+    finally:
+        conn.close()
+    return {"received": len(hits), "stored": stored}
