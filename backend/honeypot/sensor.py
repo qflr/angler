@@ -133,8 +133,14 @@ def shipper() -> None:
             print(f"shipped {len(batch)} hits", flush=True)
 
 
+class QuietServer(ThreadingHTTPServer):
+    # Scanners drop connections and reject our self-signed cert constantly; not worth a traceback each.
+    def handle_error(self, request, client_address):
+        pass
+
+
 def serve(host: str, port: int, certfile: str | None, keyfile: str | None) -> None:
-    httpd = ThreadingHTTPServer((host, port), Decoy)
+    httpd = QuietServer((host, port), Decoy)
     httpd.daemon_threads = True
     if certfile:
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
