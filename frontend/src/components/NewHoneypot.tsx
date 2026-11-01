@@ -1,7 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CVE_PATTERN, createHoneypot, getHoneypot, publishHoneypot } from '../data/honeypot';
 import type { HoneypotJob, HoneypotStatus } from '../data/types';
 import { SiteFooter } from './SiteFooter';
+
+// Profiles the decoy already answers. Same set as backend classify.DECOY_CVES.
+const PREBUILT = [
+  { id: 'CVE-2023-1389', name: 'TP-Link Archer command injection' },
+  { id: 'CVE-2017-9841', name: 'PHPUnit eval-stdin.php RCE' },
+  { id: 'CVE-2021-41773', name: 'Apache path traversal' },
+  { id: 'CVE-2024-4577', name: 'PHP-CGI argument injection' },
+] as const;
+
+const PREBUILT_IDS = new Set<string>(PREBUILT.map((cve) => cve.id));
 
 const POLL_MS = 800;
 // Lets the button's press animation play before the view changes.
@@ -69,13 +79,42 @@ function stepState(step: Step, job: HoneypotJob) {
 
 export function NewHoneypot({ onViewDashboard }: { onViewDashboard: () => void }) {
   const [cve, setCve] = useState('');
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<HoneypotJob | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const running = job && !['ready', 'published', 'failed'].includes(job.status);
+  const locked = !!job || starting;
+  const allPicked = picked.size === PREBUILT.length;
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = picked.size > 0 && !allPicked;
+  }, [picked, allPicked]);
+
+  const applyPick = (next: Set<string>) => {
+    setPicked(next);
+    if (next.size === 1) {
+      setCve([...next][0]);
+      setError(null);
+      return;
+    }
+    setCve((current) => (PREBUILT_IDS.has(current.trim().toUpperCase()) ? '' : current));
+  };
+
+  const toggleCve = (id: string) => {
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    applyPick(next);
+  };
+
+  const toggleAll = () => {
+    applyPick(allPicked ? new Set() : new Set(PREBUILT_IDS));
+  };
 
   useEffect(() => {
     if (!job || !running) return;
@@ -139,6 +178,7 @@ export function NewHoneypot({ onViewDashboard }: { onViewDashboard: () => void }
   const reset = () => {
     setJob(null);
     setCve('');
+    setPicked(new Set());
     setError(null);
   };
 
@@ -149,6 +189,42 @@ export function NewHoneypot({ onViewDashboard }: { onViewDashboard: () => void }
         <span className="brand-name">Angler</span>
       </a>
 
+      <div className="flow-stage">
+      <aside className="prebuilt">
+        <p className="flow-step-label">Prebuilt</p>
+        <div className="prebuilt-card">
+          <label className={`prebuilt-row prebuilt-all${allPicked ? ' is-selected' : ''}`}>
+            <input
+              ref={selectAllRef}
+              type="checkbox"
+              checked={allPicked}
+              onChange={toggleAll}
+              disabled={locked}
+            />
+            <span className={`prebuilt-mark${allPicked ? ' is-on' : picked.size > 0 ? ' is-some' : ''}`} aria-hidden />
+            <span className="prebuilt-copy">
+              <span className="prebuilt-id">Select all</span>
+              <span className="prebuilt-name">
+                {picked.size === 0 ? 'Profiles the decoy already answers' : `${picked.size} of ${PREBUILT.length} selected`}
+              </span>
+            </span>
+          </label>
+          {PREBUILT.map((item) => {
+            const on = picked.has(item.id);
+            return (
+              <label key={item.id} className={`prebuilt-row${on ? ' is-selected' : ''}`}>
+                <input type="checkbox" checked={on} onChange={() => toggleCve(item.id)} disabled={locked} />
+                <span className={`prebuilt-mark${on ? ' is-on' : ''}`} aria-hidden />
+                <span className="prebuilt-copy">
+                  <span className="prebuilt-id">{item.id}</span>
+                  <span className="prebuilt-name">{item.name}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </aside>
+
       <section className="flow-panel">
         <p className="flow-step-label">CVE in</p>
         <h1 className="flow-title">Which vulnerability should we impersonate?</h1>
@@ -156,7 +232,15 @@ export function NewHoneypot({ onViewDashboard }: { onViewDashboard: () => void }
           <input
             className="cve-input"
             value={cve}
-            onChange={(e) => setCve(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setCve(value);
+              const id = value.trim().toUpperCase();
+              if (PREBUILT_IDS.has(id)) {
+                setPicked(new Set([id]));
+                setError(null);
+              }
+            }}
             placeholder="CVE-2024-3400"
             aria-label="CVE ID"
             spellCheck={false}
@@ -223,6 +307,7 @@ export function NewHoneypot({ onViewDashboard }: { onViewDashboard: () => void }
           </p>
         )}
       </section>
+      </div>
 
       <SiteFooter tone="dark" />
     </main>
