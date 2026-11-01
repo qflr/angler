@@ -18,6 +18,11 @@ The TypeScript source of truth is `frontend/src/data/types.ts`. Keep the two in 
   `| 'unknown'` to both unions in `frontend/src/data/types.ts`.** The current Badge maps already render
   it as a neutral "Unknown" badge. `/api/cves` also accepts `?limit=` (default 500, urgent first).
   `/api/events` and `/api/actors` are empty until the honeypot is live; `/api/stats` counts are real.
+- **Nov 1, per-CVE dashboard tabs:** `GET /api/honeypots` lists published honeypots (one per CVE,
+  `HoneypotJob` shape, newest first). Make one dashboard tab per entry plus an "All traffic" tab.
+  `/api/events`, `/api/stats` and `/api/actors` accept `?cve_id=CVE-2023-1389` to scope a tab:
+  events with that `cve_id`, `total_hits` for it, and actors who targeted it. "All traffic" = no filter
+  (that is where background noise shows up).
 - Live API: `https://angler-api.onrender.com` (pipeline health at `/status`).
 
 ## `GET /api/cves`

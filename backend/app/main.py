@@ -158,13 +158,15 @@ _EVENT_FIELDS = [f for f in AttackEvent.model_fields]
 
 
 @app.get("/api/events", response_model=list[AttackEvent], response_model_exclude_none=True)
-def list_events(limit: int = Query(1000, ge=1, le=5000)):
+def list_events(limit: int = Query(1000, ge=1, le=5000), cve_id: str | None = None):
     """Real honeypot hits, newest first. Our own test traffic (is_test) is never returned."""
     conn = db.connect()
     try:
         rows = conn.execute(
-            f"SELECT {', '.join(_EVENT_FIELDS)} FROM events WHERE is_test = 0 ORDER BY timestamp DESC LIMIT ?",
-            (limit,),
+            f"SELECT {', '.join(_EVENT_FIELDS)} FROM events WHERE is_test = 0"
+            + (" AND cve_id = ?" if cve_id else "")
+            + " ORDER BY timestamp DESC LIMIT ?",
+            (cve_id, limit) if cve_id else (limit,),
         ).fetchall()
     finally:
         conn.close()
@@ -174,7 +176,7 @@ def list_events(limit: int = Query(1000, ge=1, le=5000)):
 
 
 @app.get("/api/stats", response_model=Stats, response_model_exclude_none=True)
-def get_stats(window: str = "24h"):
+def get_stats(window: str = "24h", cve_id: str | None = None):
     since = _cutoff(window)
     conn = db.connect()
     try:
@@ -185,7 +187,8 @@ def get_stats(window: str = "24h"):
             )
         )
         hits = conn.execute(
-            "SELECT COUNT(*) AS n FROM events WHERE is_test = 0 AND timestamp >= ?", (since,)
+            "SELECT COUNT(*) AS n FROM events WHERE is_test = 0 AND timestamp >= ?" + (" AND cve_id = ?" if cve_id else ""),
+            (since, cve_id) if cve_id else (since,),
         ).fetchone()["n"]
     finally:
         conn.close()
@@ -200,9 +203,10 @@ def get_stats(window: str = "24h"):
 
 
 @app.get("/api/actors", response_model=list[Actor], response_model_exclude_none=True)
-def list_actors():
+def list_actors(cve_id: str | None = None):
     """Attacker dossiers: IPs clustered into actors by shared payloads, infrastructure and identity."""
-    return actors.current()[1]
+    dossiers = actors.current()[1]
+    return [a for a in dossiers if cve_id in (a.get("cves") or [])] if cve_id else dossiers
 
 
 @app.post("/ingest/events")
@@ -296,6 +300,12 @@ def create_honeypot(payload: dict = Body(...)):
     job = honeypots.create(cve_id)
     _start_build(job["id"], cve_id)
     return job
+
+
+@app.get("/api/honeypots")
+def list_honeypots():
+    """Published honeypots, one per CVE (latest publish wins). The dashboard makes a tab for each."""
+    return honeypots.list_published()
 
 
 @app.get("/api/honeypots/{job_id}")

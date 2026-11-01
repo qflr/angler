@@ -99,3 +99,30 @@ def test_actor_clustering(monkeypatch):
     assert dossiers[0]["classification"] == "targeted" and dossiers[0]["cves"] == ["CVE-2023-1389"]
     tor_actor = next(d for d in dossiers if d["ips"] == ["185.220.101.60"])
     assert tor_actor["tags"] == ["tor"]
+
+
+def test_per_cve_filters_and_published_list(tmp_path, monkeypatch):
+    from app import honeypots
+
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "tabs.db")
+    monkeypatch.setattr(db, "DATABASE_URL", None)
+    monkeypatch.setattr(main, "INGEST_KEY", "k")
+    monkeypatch.setattr(geoip, "lookup", lambda conn, ips: {})
+    hits = [
+        {"id": "a", "source_ip": "45.33.32.156", "port": 80, "timestamp": db.now_iso(), "method": "POST",
+         "path": "/cgi-bin/luci/;stok=/locale?form=country", "body_preview": "country=$(id)"},
+        {"id": "b", "source_ip": "45.33.32.157", "port": 80, "timestamp": db.now_iso(), "method": "GET", "path": "/.env"},
+    ]
+    client.post("/ingest/events", json=hits, headers={"X-Ingest-Key": "k"})
+    assert [e["id"] for e in client.get("/api/events?cve_id=CVE-2023-1389").json()] == ["a"]
+    assert len(client.get("/api/events").json()) == 2
+    assert client.get("/api/stats?cve_id=CVE-2023-1389").json()["total_hits"] == 1
+    assert all("CVE-2023-1389" in a["cves"] for a in client.get("/api/actors?cve_id=CVE-2023-1389").json())
+
+    assert client.get("/api/honeypots").json() == []
+    for _ in range(2):  # publishing the same CVE twice still gives one tab
+        job = honeypots.create("CVE-2023-1389")
+        honeypots._set(job["id"], status="ready")
+        honeypots.publish(job["id"])
+    tabs = client.get("/api/honeypots").json()
+    assert [t["cve_id"] for t in tabs] == ["CVE-2023-1389"] and tabs[0]["status"] == "published"

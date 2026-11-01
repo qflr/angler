@@ -178,3 +178,19 @@ def publish(job_id: str) -> dict | None:
         raise ValueError(f"job is {row['status']}, not ready")
     _set(job_id, status="published", url=DECOY_URL)
     return get(job_id)
+
+
+def list_published() -> list[dict]:
+    conn = db.connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM honeypot_jobs WHERE status = 'published' ORDER BY updated_at DESC"
+        ).fetchall()
+    finally:
+        conn.close()
+    seen, out = set(), []
+    for r in rows:
+        if r["cve_id"] not in seen:
+            seen.add(r["cve_id"])
+            out.append(view(dict(r)))
+    return out
