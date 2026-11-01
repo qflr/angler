@@ -37,6 +37,28 @@ Point the frontend at it with `VITE_API_URL=http://localhost:8000` in `frontend/
 | Health Check Path | `/healthz` |
 | Env | `FRONTEND_ORIGINS=https://<frontend>.onrender.com` (comma-separated). localhost on any port is always allowed. |
 
+## CVE ingestion (Phase 1)
+
+Pulls `CVEProject/cvelistV5` changes from `cves/deltaLog.json` (30 days of repo updates, ~2 MB
+gzipped), dedups by CVE ID, tags new vs updated, and upserts into SQLite (`angler.db`, gitignored).
+
+```bash
+python -m app.run_local                 # one pull since the stored cursor (first run: last 24h)
+python -m app.run_local --every 900     # demo mode, every 15 min
+python -m app.run_local --since 2026-11-01T00:00:00.000Z   # replay a window; dedup makes it a no-op
+```
+
+Pipeline (`app/pipeline.py`), one Workflows task per checkpoint:
+`ingest_cves` → `plan_cve_delta` → `ingest_cve_batch` × N in parallel → `commit_cve_cursor`.
+The cursor only moves after every batch is done, failed fetches go to `ingest_pending` and retry
+next run, and an older copy of a record never overwrites a newer one.
+
+Test gate result (live data, Nov 1): run 1 stored 845 CVEs (79 new, 766 updated) in 9 s; run 2 found
+nothing new; replaying the same 24 h window re-fetched 845 and wrote 0 (all unchanged).
+
+Deploy caveat: Workflows runs each task on its own compute, so a shared SQLite file only works
+locally. Deployed runs need Postgres.
+
 ## Render Workflows notes (confirmed against render.com/docs/workflows, Nov 2026)
 
 - Package `render>=1.0.1`; `from render import TaskContext, Workflows, Retry`; `app = Workflows()`; `@app.task`.
