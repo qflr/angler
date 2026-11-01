@@ -219,7 +219,7 @@ export function CveLeaderboard({ cves, hits }: { cves: Cve[]; hits: ReturnType<t
 
 // --- Attacker dossiers -------------------------------------------------------
 
-export function ActorsCard({ actors, now }: { actors: Actor[]; now: number }) {
+export function ActorsCard({ actors, now, onSelect }: { actors: Actor[]; now: number; onSelect?: (a: Actor) => void }) {
   return (
     <Card>
       <BlockStack gap="400">
@@ -228,8 +228,16 @@ export function ActorsCard({ actors, now }: { actors: Actor[]; now: number }) {
         </CardTitle>
         <BlockStack gap="300">
           {actors.slice(0, 6).map((a, i) => (
-            <Box
+            <div
               key={a.id}
+              className="actor-row"
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelect?.(a)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect?.(a)}
+              title="Open attacker dossier"
+            >
+            <Box
               paddingBlockStart={i ? '300' : '0'}
               borderBlockStartWidth={i ? '025' : undefined}
               borderColor="border-secondary"
@@ -267,6 +275,7 @@ export function ActorsCard({ actors, now }: { actors: Actor[]; now: number }) {
                 </InlineStack>
               </BlockStack>
             </Box>
+            </div>
           ))}
         </BlockStack>
       </BlockStack>

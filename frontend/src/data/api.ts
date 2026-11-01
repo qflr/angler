@@ -20,6 +20,16 @@ export const fetchEvents = () =>
 export const fetchStats = () => (usingMock ? Promise.resolve(mockStats()) : get<Stats>('/api/stats'));
 export const fetchActors = () => (usingMock ? Promise.resolve(mockActors()) : get<Actor[]>('/api/actors'));
 
+/** GET /api/actors/{id}: one dossier plus every request that actor sent. */
+export interface ActorDetailData extends Actor {
+  user_agents: string[];
+  download_urls: string[];
+  paths: { path: string; count: number }[];
+  hits: (AttackEvent & { body_preview?: string | null; user_agent?: string | null })[];
+}
+
+export const fetchActorDetail = (id: string) => get<ActorDetailData>(`/api/actors/${encodeURIComponent(id)}`);
+
 // Tabs are optional: an older backend without /api/honeypots just shows "All traffic".
 export const fetchHoneypots = () =>
   usingMock ? Promise.resolve([] as HoneypotJob[]) : get<HoneypotJob[]>('/api/honeypots').catch(() => [] as HoneypotJob[]);

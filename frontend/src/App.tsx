@@ -8,11 +8,12 @@ import { SiteFooter } from './components/SiteFooter';
 import { MetricCard } from './components/MetricCard';
 import { BehaviorCard, LocationCard, NoiseCard } from './components/Panels';
 import { ActorsCard, CveLeaderboard, EventStream } from './components/Tables';
+import { ActorDetail } from './components/ActorDetail';
 import { usingMock } from './data/api';
 import { HONEYPOT } from './data/config';
 import { hitsByCve, minuteSeries, stageBreakdown, topLocations } from './data/derive';
 import { useLive } from './data/useLive';
-import type { AttackEvent } from './data/types';
+import type { Actor, AttackEvent } from './data/types';
 
 const matches = (e: AttackEvent, q: string) =>
   [e.source_ip, e.cve_id, e.city, e.country, e.region, e.org, `AS${e.asn}`, String(e.port)].some((f) =>
@@ -43,6 +44,7 @@ export default function App() {
   const [autoRotate, setAutoRotate] = useState(true);
   // 'all' or the CVE ID of a published honeypot.
   const [tab, setTab] = useState<string>('all');
+  const [openActor, setOpenActor] = useState<Actor | null>(null);
 
   const now = updatedAt ?? Date.now();
   const q = query.trim().toLowerCase();
@@ -217,7 +219,7 @@ export default function App() {
                 <NoiseCard series={derived.series} />
                 <EventStream events={events} now={now} />
                 <CveLeaderboard cves={scoped!.cves} hits={derived.cveHits} />
-                <ActorsCard actors={scoped!.actors} now={now} />
+                <ActorsCard actors={scoped!.actors} now={now} onSelect={setOpenActor} />
                 {derived.stages.any && <BehaviorCard breakdown={derived.stages} />}
                 {derived.locations.length > 0 && <LocationCard locations={derived.locations} />}
                 <SiteFooter />
@@ -243,6 +245,7 @@ export default function App() {
           </div>
         </section>
       </main>
+      {openActor && <ActorDetail actor={openActor} events={data?.events ?? []} now={now} onClose={() => setOpenActor(null)} />}
     </div>
   );
 }
