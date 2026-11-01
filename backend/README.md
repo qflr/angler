@@ -59,6 +59,20 @@ nothing new; replaying the same 24 h window re-fetched 845 and wrote 0 (all unch
 Deploy caveat: Workflows runs each task on its own compute, so a shared SQLite file only works
 locally. Deployed runs need Postgres.
 
+## Enrichment (Phase 2)
+
+`python -m app.run_local` now pulls, then enriches (`--enrich-only` skips the pull):
+
+| job | source | writes |
+|---|---|---|
+| KEV | CISA KEV JSON | `kev`, `kev_date_added`; `kev` change rows dated by CISA's dateAdded; backfills KEV additions from the last 30 days |
+| Patch | OSV.dev (CVE record + GHSA aliases), GitHub Advisories API if `GITHUB_TOKEN`, then the CVE record's version ranges | `patch_status` patched/partial/unpatched or NULL if no source knows, `patch_source`, `fixed_versions_json`; `patched` change rows only on an observed transition |
+| Severity | NVD 2.0 API, only for CVEs whose record had no CVSS (throttled; `NVD_API_KEY` speeds it up) | `cvss`, `severity`, `severity_source = nvd` |
+
+Test gate (live, Nov 1): CVE-2024-3400, -4577, -23897, CVE-2021-44228 all flagged KEV; 3400 patched
+from its record (PAN-OS 10.2.9-h1 / 11.0.4-h1 / 11.1.2-h3), 4577 and 23897 patched via OSV/GHSA;
+731/883 tracked CVEs patched, 137 unknown. NVD had no score yet for any of the 28 unscored CVEs.
+
 ## Render Workflows notes (confirmed against render.com/docs/workflows, Nov 2026)
 
 - Package `render>=1.0.1`; `from render import TaskContext, Workflows, Retry`; `app = Workflows()`; `@app.task`.

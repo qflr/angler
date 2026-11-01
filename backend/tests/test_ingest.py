@@ -1,3 +1,4 @@
+import json
 import copy
 
 import pytest
@@ -101,3 +102,36 @@ def test_pipeline_twice_is_idempotent(tmp_path, monkeypatch):
     assert run_local.run_once()["items"] == 0                       # cursor advanced
     replay = run_local.run_once("2026-11-01T00:00:00.000Z")         # same window again
     assert (replay["new"], replay["updated"], replay["unchanged"]) == (0, 0, 5)
+
+
+def test_patch_from_cve_record_ignores_unaffected_products():
+    from app.enrich import patch
+
+    affected = [
+        {"product": "PAN-OS", "versions": [{"version": "10.2.0", "status": "affected", "lessThan": "10.2.9-h1",
+                                            "changes": [{"at": "10.2.9-h1", "status": "unaffected"}]}]},
+        {"product": "Cloud NGFW", "versions": [{"version": "All", "status": "unaffected"}]},
+    ]
+    assert patch.from_cve_record(json.dumps(affected)) == ("patched", ["PAN-OS@10.2.9-h1"], "cve-record")
+    no_fix = [{"product": "X", "versions": [{"version": "1.0", "status": "affected"}]}]
+    assert patch.from_cve_record(json.dumps(no_fix)) is None  # record can't prove "unpatched"
+
+
+def test_patch_from_osv_partial_and_unpatched():
+    from app.enrich import patch
+
+    fixed = {"package": {"name": "a"}, "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "1.2"}]}]}
+    open_ = {"package": {"name": "b"}, "ranges": [{"type": "ECOSYSTEM", "events": [{"introduced": "0"}]}]}
+    assert patch.from_osv_records([{"affected": [fixed]}]) == ("patched", ["a@1.2"], "osv")
+    assert patch.from_osv_records([{"affected": [fixed, open_]}])[0] == "partial"
+    assert patch.from_osv_records([{"affected": [open_]}])[0] == "unpatched"
+
+
+def test_nvd_parse_prefers_primary():
+    from app.enrich import nvd
+
+    payload = {"vulnerabilities": [{"cve": {"metrics": {"cvssMetricV31": [
+        {"type": "Secondary", "cvssData": {"baseScore": 7.5, "baseSeverity": "HIGH"}},
+        {"type": "Primary", "cvssData": {"baseScore": 9.8, "baseSeverity": "CRITICAL"}}]}}}]}
+    assert nvd.parse(payload) == (9.8, "critical")
+    assert nvd.parse({"vulnerabilities": [{"cve": {"metrics": {}}}]}) is None

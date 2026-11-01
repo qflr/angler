@@ -33,8 +33,12 @@ CREATE TABLE IF NOT EXISTS cves (
     -- enrichment (Phase 2), NULL until a job has checked
     kev              INTEGER,
     kev_date_added   TEXT,
-    patch_status     TEXT,
+    kev_checked_at   TEXT,
+    patch_status     TEXT,     -- patched | partial | unpatched, NULL = no source knows
+    patch_source     TEXT,     -- osv | ghsa | cve-record
     fixed_versions_json TEXT,
+    patch_checked_at TEXT,
+    nvd_checked_at   TEXT,
     first_ingested_at TEXT NOT NULL,
     last_changed_at  TEXT NOT NULL
 );
@@ -43,7 +47,7 @@ CREATE TABLE IF NOT EXISTS cves (
 CREATE TABLE IF NOT EXISTS cve_changes (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     cve_id  TEXT NOT NULL,
-    kind    TEXT NOT NULL,  -- new | updated | patched | kev
+    kind    TEXT NOT NULL,  -- new | updated | patched | kev  (kev rows are dated by CISA dateAdded)
     at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS cve_changes_at ON cve_changes (at);
@@ -78,11 +82,27 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# Columns added after a DB may already exist; connect() adds any that are missing.
+LATE_COLUMNS = {
+    "cves": {
+        "kev_checked_at": "TEXT",
+        "patch_source": "TEXT",
+        "patch_checked_at": "TEXT",
+        "nvd_checked_at": "TEXT",
+    }
+}
+
+
 def connect(path: Path | str | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(path or DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    for table, cols in LATE_COLUMNS.items():
+        have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for name, decl in cols.items():
+            if name not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
     return conn
 
 
@@ -103,7 +123,10 @@ def record_hash(raw: dict) -> str:
 
 
 def upsert_cve(conn: sqlite3.Connection, cve: dict, feed_kind: str, at: str | None = None) -> str:
-    """Store one parsed CVE. Returns new | updated | unchanged | stale.
+    """Store one parsed CVE. Returns new | updated | unchanged | stale | backfilled.
+
+    feed_kind "backfill" stores a CVE we pulled in for context (e.g. a recent KEV entry older than
+    our feed window) without logging it as a new or updated CVE.
 
     Dedup is by CVE ID. A record is only rewritten when its content hash changed and it is not
     older than what we hold, so replaying the same feed window is a no-op.
@@ -121,6 +144,8 @@ def upsert_cve(conn: sqlite3.Connection, cve: dict, feed_kind: str, at: str | No
                    :severity, :severity_source, :at, :at)""",
             {**cve, "at": at},
         )
+        if feed_kind == "backfill":
+            return "backfilled"
         # First sighting of a CVE the feed calls "updated" is an old CVE that changed, not a new one.
         kind = "new" if feed_kind == "new" else "updated"
         conn.execute("INSERT INTO cve_changes (cve_id, kind, at) VALUES (?, ?, ?)", (cve["id"], kind, at))
