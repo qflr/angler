@@ -104,3 +104,4 @@ def test_triage_rules():
     assert triage.summary(None, "First sentence. Second sentence.") == "First sentence."
     assert triage.product("Acme", "Acme Widget") == "Acme Widget"
     assert triage.product("Acme", "Widget") == "Acme Widget"
+    assert triage.product("n/a", "TP-Link Archer AX21") == "TP-Link Archer AX21"

@@ -38,6 +38,15 @@ def backfill_items(conn: db.Conn, catalog: dict[str, dict], days: int = BACKFILL
     ]
 
 
+def apply_one(conn: db.Conn, cve_id: str, catalog: dict[str, dict]) -> bool:
+    entry = catalog.get(cve_id)
+    conn.execute(
+        "UPDATE cves SET kev = ?, kev_date_added = ?, kev_checked_at = ? WHERE id = ?",
+        (1 if entry else 0, entry["dateAdded"] if entry else None, db.now_iso(), cve_id),
+    )
+    return entry is not None
+
+
 def apply(conn: db.Conn, catalog: dict[str, dict]) -> dict:
     """Set kev flags on every tracked CVE. Returns counts."""
     checked_at = db.now_iso()

@@ -47,6 +47,7 @@ def summary(title: str | None, description: str | None, limit: int = 240) -> str
 
 
 def product(vendor: str | None, product_name: str | None) -> str | None:
+    vendor = None if (vendor or "").strip().lower() in ("", "n/a", "unknown") else vendor
     if not product_name:
         return vendor
     if not vendor or product_name.lower().startswith(vendor.lower()):

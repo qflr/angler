@@ -15,7 +15,7 @@ import os
 
 from render import Retry, TaskContext, Workflows
 
-from . import db
+from . import db, honeypots
 from .enrich import kev, nvd, patch
 from .ingest import cvelist
 
@@ -176,3 +176,37 @@ async def refresh(ctx: TaskContext, since: str | None = None) -> dict:
     ingest = await ctx.run(ingest_cves, since)
     enrich = await ctx.run(enrich_cves)
     return {"ingest": ingest, "enrich": enrich}
+
+
+# --- CVE in, honeypot out ------------------------------------------------------------------------
+
+
+@app.task
+def honeypot_research(ctx: TaskContext, job_id: str, cve_id: str) -> dict | None:
+    return honeypots.research(job_id, cve_id)
+
+
+@app.task
+def honeypot_build(ctx: TaskContext, job_id: str, cve_id: str) -> bool:
+    return honeypots.build(job_id, cve_id)
+
+
+@app.task
+def honeypot_contain(ctx: TaskContext, job_id: str) -> bool:
+    return honeypots.contain(job_id)
+
+
+@app.task
+async def build_honeypot(ctx: TaskContext, job_id: str, cve_id: str) -> str:
+    """Root task for POST /api/honeypots: research -> build -> contain, each its own checkpoint."""
+    try:
+        if await ctx.run(honeypot_research, job_id, cve_id) is None:
+            return "failed"
+        if not await ctx.run(honeypot_build, job_id, cve_id):
+            return "failed"
+        if not await ctx.run(honeypot_contain, job_id):
+            return "failed"
+    except Exception as e:  # retries exhausted: surface it on the job instead of leaving it spinning
+        honeypots.fail(job_id, f"pipeline error: {e}")
+        raise
+    return "ready"

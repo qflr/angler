@@ -31,6 +31,11 @@ services:
       # Shared secret for POST /ingest/events from the honeypot sensor (set in the dashboard).
       - key: INGEST_KEY
         sync: false
+      # Lets POST /api/honeypots start the build_honeypot workflow; without it the task runs in-process.
+      - key: RENDER_API_KEY
+        sync: false
+      - key: DECOY_URL
+        value: http://34.72.134.92/
 
   # CVE ingestion + enrichment pipeline (Render Workflows). Tasks in app/pipeline.py.
   - type: workflow

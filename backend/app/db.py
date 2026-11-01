@@ -117,6 +117,18 @@ CREATE TABLE IF NOT EXISTS ip_info (
     looked_up_at TEXT NOT NULL
 );
 
+-- CVE-in -> honeypot-out jobs (app/honeypots.py, POST /api/honeypots).
+CREATE TABLE IF NOT EXISTS honeypot_jobs (
+    id            TEXT PRIMARY KEY,
+    cve_id        TEXT NOT NULL,
+    status        TEXT NOT NULL,
+    advisory_json TEXT,
+    url           TEXT,
+    error         TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS state (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL

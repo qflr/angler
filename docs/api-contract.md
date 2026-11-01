@@ -160,11 +160,14 @@ Attacker dossiers: multiple IPs collapsed into one actor using shared fingerprin
 
 ---
 
-## Proposed: honeypot build pipeline
+## Honeypot build pipeline
 
-*Added by the frontend for the CVE-in flow; not built on the backend yet. The frontend simulates
-these until they exist (`frontend/src/data/honeypot.ts`). Push back on shape or naming here before
-implementing.*
+*Proposed by the frontend; **live on the backend since Nov 1** (shape unchanged), so the frontend
+simulation in `frontend/src/data/honeypot.ts` is no longer needed. Each stage is real: research pulls
+the CVE record + KEV + patch status, build picks a decoy profile, contain health-checks the sandboxed
+decoy. CVEs without a decoy profile end in `failed` with the reason in `error`; live profiles today:
+CVE-2023-1389, CVE-2017-9841, CVE-2021-41773, CVE-2024-4577. `url` is the real decoy
+(`http://34.72.134.92/`). CORS now allows POST from the frontend origins.*
 
 The flow: user pastes a CVE → **research** (verified advisories, PoCs) → **build** (generate the
 vulnerable app) → **contain** (isolated, hollow, no egress, disposable) → **ready** → user clicks

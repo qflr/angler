@@ -16,7 +16,7 @@ import ipaddress
 from fastapi import Body, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import classify, db, geoip, triage
+from . import classify, db, geoip, honeypots, triage
 from .schemas import Actor, AttackEvent, Cve, Stats
 
 # Shared secret the honeypot sensor sends in X-Ingest-Key. Unset = ingest disabled.
@@ -31,8 +31,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=FRONTEND_ORIGINS,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
-    allow_methods=["GET"],  # the sensor's POST is server-to-server, no CORS needed
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
     expose_headers=["X-Angler-Data-Source"],
 )
 
@@ -276,3 +276,63 @@ def ingest_events(hits: list[dict] = Body(...), x_ingest_key: str = Header("")):
     finally:
         conn.close()
     return {"received": len(hits), "stored": stored}
+
+
+# --- CVE in, honeypot out (contract: "honeypot build pipeline") --------------------------------
+
+RENDER_API_KEY = os.getenv("RENDER_API_KEY")
+WORKFLOW_SLUG = os.getenv("ANGLER_WORKFLOW_SLUG", "angler-pipeline")
+
+
+def _start_build(job_id: str, cve_id: str) -> None:
+    """Run build_honeypot on Render Workflows when we can, else the same task code in-process."""
+    if RENDER_API_KEY:
+        try:
+            from render import Render
+
+            Render().workflows.start_task(f"{WORKFLOW_SLUG}/build_honeypot", [job_id, cve_id])
+            return
+        except Exception as e:
+            print(f"workflow start failed, running in-process: {e}")
+    import asyncio
+    import threading
+
+    from .pipeline import build_honeypot
+    from .run_local import LocalContext
+
+    def run():
+        try:
+            asyncio.run(LocalContext().run(build_honeypot, job_id, cve_id))
+        except Exception as e:
+            print(f"build_honeypot {job_id} failed: {e}")
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+@app.post("/api/honeypots")
+def create_honeypot(payload: dict = Body(...)):
+    cve_id = str(payload.get("cve_id", "")).strip().upper()
+    if not honeypots.CVE_ID.match(cve_id):
+        raise HTTPException(422, "cve_id must look like CVE-2024-4577")
+    job = honeypots.create(cve_id)
+    _start_build(job["id"], cve_id)
+    return job
+
+
+@app.get("/api/honeypots/{job_id}")
+def get_honeypot(job_id: str):
+    job = honeypots.get(job_id)
+    if not job:
+        raise HTTPException(404, "no such job")
+    return job
+
+
+@app.post("/api/honeypots/{job_id}/publish")
+def publish_honeypot(job_id: str):
+    try:
+        job = honeypots.publish(job_id)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    if not job:
+        raise HTTPException(404, "no such job")
+    return job
