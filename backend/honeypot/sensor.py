@@ -74,10 +74,42 @@ def fake_output(code: str) -> str:
     return "\n".join(out)
 
 
+# path -> (status, body bytes, content type), refreshed from the API by profile_puller().
+_profile_routes: dict[str, tuple[int, bytes, str]] = {}
+_ALLOWED_TYPES = {"text/plain", "text/html", "application/json"}
+PROFILE_SECONDS = 30
+
+
+def profile_puller() -> None:
+    """Fetch generated decoy profiles. Re-checks shape here too: the sensor trusts nothing it is sent."""
+    global _profile_routes
+    while True:
+        try:
+            req = urllib.request.Request(f"{API}/ingest/profiles", headers={"X-Ingest-Key": INGEST_KEY})
+            with urllib.request.urlopen(req, timeout=20) as res:
+                profiles = json.load(res)
+            routes = {}
+            for prof in profiles[:50]:
+                for r in prof.get("responses", [])[:4]:
+                    p, st, ct, b = r.get("path"), r.get("status"), r.get("content_type"), r.get("body", "")
+                    if (isinstance(p, str) and p.startswith("/") and ".." not in p and isinstance(st, int)
+                            and 200 <= st <= 599 and ct in _ALLOWED_TYPES and isinstance(b, str) and len(b) <= 200):
+                        routes[p.split("?", 1)[0]] = (st, b.encode(), ct)
+            _profile_routes = routes
+        except Exception as e:  # API down: keep serving the last good set
+            print(f"profile pull failed: {e}", flush=True)
+        time.sleep(PROFILE_SECONDS)
+
+
 def route(method: str, raw_path: str, body: str) -> tuple[int, bytes, str]:
     """Pick a believable static response. Returns (status, body, content type)."""
     path = raw_path.split("?", 1)[0]
     html, text = "text/html; charset=UTF-8", "text/plain"
+
+    # Generated profiles (build agent): exact static bytes the API validated. Nothing is evaluated.
+    hit = _profile_routes.get(path)
+    if hit:
+        return hit
 
     # CVE-2023-1389, TP-Link Archer AX21 locale injection (Mirai's favourite).
     if path.startswith("/cgi-bin/luci/") and "locale" in raw_path:
@@ -218,6 +250,7 @@ if __name__ == "__main__":
     if not INGEST_KEY:
         raise SystemExit("INGEST_KEY is required")
     threading.Thread(target=shipper, daemon=True).start()
+    threading.Thread(target=profile_puller, daemon=True).start()
     for p in args.port or [80]:
         threading.Thread(target=serve, args=(args.host, p, None, None), daemon=True).start()
     if args.tls_port:
