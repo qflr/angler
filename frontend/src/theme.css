@@ -1132,3 +1132,40 @@ h3.eyebrow, p.metric-value { margin: 0; }
   .flow-stage, .flow-panel, .pipe-step, .flow-actions { animation: none; }
   .spinner { animation-duration: 2s; }
 }
+
+/* Per-CVE tabs: one per published honeypot, plus "All traffic". */
+.cve-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  background: var(--angler-prussian-blue);
+  border-bottom: 1px solid var(--angler-space-indigo);
+  overflow-x: auto;
+}
+.cve-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--angler-gray);
+  font: 600 13px/1 inherit;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cve-tab:hover { color: #fff; }
+.cve-tab.is-active { color: #fff; border-bottom-color: var(--angler-mauve); }
+.cve-tab-product { font-weight: 400; color: var(--angler-gray); max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.cve-tab-count {
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: var(--angler-space-indigo);
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+}
+.cve-tab.is-active .cve-tab-count { background: var(--angler-mauve); }

@@ -41,10 +41,31 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [showNoise, setShowNoise] = useState(true);
   const [autoRotate, setAutoRotate] = useState(true);
+  // 'all' or the CVE ID of a published honeypot.
+  const [tab, setTab] = useState<string>('all');
 
   const now = updatedAt ?? Date.now();
   const q = query.trim().toLowerCase();
-  const events = useMemo(() => (data && q ? data.events.filter((h) => matches(h, q)) : data?.events ?? []), [data, q]);
+
+  // One published honeypot = one tab; everything below reads `scoped` so the tab filters every panel.
+  const tabs = data?.honeypots ?? [];
+  const activeTab = tab !== 'all' && tabs.some((h) => h.cve_id === tab) ? tab : 'all';
+  const scoped = useMemo(() => {
+    if (!data || activeTab === 'all') return data;
+    const events = data.events.filter((e) => e.cve_id === activeTab);
+    return {
+      ...data,
+      events,
+      actors: data.actors.filter((a) => a.cves?.includes(activeTab)),
+      cves: data.cves.filter((c) => c.id === activeTab),
+      stats: { ...data.stats, total_hits: events.length },
+    };
+  }, [data, activeTab]);
+
+  const events = useMemo(
+    () => (scoped && q ? scoped.events.filter((h) => matches(h, q)) : scoped?.events ?? []),
+    [scoped, q],
+  );
 
   const onSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,16 +77,16 @@ export default function App() {
   };
 
   const derived = useMemo(() => {
-    if (!data) return null;
-    const series = minuteSeries(data.events, now);
+    if (!scoped) return null;
+    const series = minuteSeries(scoped.events, now);
     return {
       series,
       hitSpark: series.map((p) => p.noise + p.targeted),
-      stages: stageBreakdown(data.events, now),
-      locations: topLocations(data.events),
-      cveHits: hitsByCve(data.events),
+      stages: stageBreakdown(scoped.events, now),
+      locations: topLocations(scoped.events),
+      cveHits: hitsByCve(scoped.events),
     };
-  }, [data, now]);
+  }, [scoped, now]);
 
   if (view === 'landing') {
     return <Landing data={data} now={now} onEnter={() => (window.location.hash = '#/new')} />;
@@ -128,6 +149,28 @@ export default function App() {
         </div>
       </header>
 
+      {tabs.length > 0 && (
+        <nav className="cve-tabs" aria-label="Honeypots">
+          <button type="button" className={`cve-tab${activeTab === 'all' ? ' is-active' : ''}`} onClick={() => setTab('all')}>
+            All traffic
+            <span className="cve-tab-count">{data?.events.length ?? 0}</span>
+          </button>
+          {tabs.map((h) => (
+            <button
+              key={h.cve_id}
+              type="button"
+              className={`cve-tab${activeTab === h.cve_id ? ' is-active' : ''}`}
+              onClick={() => setTab(h.cve_id)}
+              title={h.advisory?.description ?? undefined}
+            >
+              {h.cve_id}
+              {h.advisory?.product && <span className="cve-tab-product">{h.advisory.product}</span>}
+              <span className="cve-tab-count">{data?.events.filter((e) => e.cve_id === h.cve_id).length ?? 0}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+
       <main className="main">
         <section className="rail">
           <BlockStack gap="300">
@@ -144,37 +187,37 @@ export default function App() {
               <>
                 <MetricCard
                   title="Total hits"
-                  help={`Every request the honeypot received, noise included. Last ${data.stats.window ?? '24h'}. Sparkline: last 30 minutes.`}
-                  value={data.stats.total_hits.toLocaleString()}
+                  help={`Every request the honeypot received, noise included. Last ${scoped!.stats.window ?? '24h'}. Sparkline: last 30 minutes.`}
+                  value={scoped!.stats.total_hits.toLocaleString()}
                   spark={derived.hitSpark}
                   wide
                 />
                 <InlineGrid columns={2} gap="300">
                   <MetricCard
                     title="New CVEs"
-                    help={`CVEs first published in the last ${data.stats.window ?? '24h'}.`}
-                    value={data.stats.new_cves.toLocaleString()}
+                    help={`CVEs first published in the last ${scoped!.stats.window ?? '24h'}.`}
+                    value={scoped!.stats.new_cves.toLocaleString()}
                   />
                   <MetricCard
                     title="Updated CVEs"
-                    help={`Existing CVE records that changed in the last ${data.stats.window ?? '24h'}.`}
-                    value={data.stats.updated_cves.toLocaleString()}
+                    help={`Existing CVE records that changed in the last ${scoped!.stats.window ?? '24h'}.`}
+                    value={scoped!.stats.updated_cves.toLocaleString()}
                   />
                   <MetricCard
                     title="Newly patched"
-                    help={`CVEs that got a vendor fix in the last ${data.stats.window ?? '24h'}.`}
-                    value={data.stats.newly_patched.toLocaleString()}
+                    help={`CVEs that got a vendor fix in the last ${scoped!.stats.window ?? '24h'}.`}
+                    value={scoped!.stats.newly_patched.toLocaleString()}
                   />
                   <MetricCard
                     title="Newly KEV"
-                    help={`CVEs added to CISA's Known Exploited Vulnerabilities catalog in the last ${data.stats.window ?? '24h'}.`}
-                    value={data.stats.newly_kev.toLocaleString()}
+                    help={`CVEs added to CISA's Known Exploited Vulnerabilities catalog in the last ${scoped!.stats.window ?? '24h'}.`}
+                    value={scoped!.stats.newly_kev.toLocaleString()}
                   />
                 </InlineGrid>
                 <NoiseCard series={derived.series} />
                 <EventStream events={events} now={now} />
-                <CveLeaderboard cves={data.cves} hits={derived.cveHits} />
-                <ActorsCard actors={data.actors} now={now} />
+                <CveLeaderboard cves={scoped!.cves} hits={derived.cveHits} />
+                <ActorsCard actors={scoped!.actors} now={now} />
                 {derived.stages.any && <BehaviorCard breakdown={derived.stages} />}
                 {derived.locations.length > 0 && <LocationCard locations={derived.locations} />}
                 <SiteFooter />
@@ -184,7 +227,7 @@ export default function App() {
         </section>
 
         <section className="globe-pane" aria-label="Attack map">
-          {data && <AttackGlobe ref={globe} events={data.events} honeypot={HONEYPOT} showNoise={showNoise} autoRotate={autoRotate} />}
+          {scoped && <AttackGlobe ref={globe} events={scoped.events} honeypot={HONEYPOT} showNoise={showNoise} autoRotate={autoRotate} />}
           <div className="globe-legend">
             <span className="legend-chip">
               <span className="swatch swatch-targeted" /> Targeted

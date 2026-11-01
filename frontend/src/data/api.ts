@@ -1,5 +1,5 @@
 import { mockActors, mockCves, mockEvents, mockStats } from './mock';
-import type { Actor, AttackEvent, Cve, LiveData, Stats } from './types';
+import type { Actor, AttackEvent, Cve, HoneypotJob, LiveData, Stats } from './types';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
 
@@ -20,7 +20,17 @@ export const fetchEvents = () =>
 export const fetchStats = () => (usingMock ? Promise.resolve(mockStats()) : get<Stats>('/api/stats'));
 export const fetchActors = () => (usingMock ? Promise.resolve(mockActors()) : get<Actor[]>('/api/actors'));
 
+// Tabs are optional: an older backend without /api/honeypots just shows "All traffic".
+export const fetchHoneypots = () =>
+  usingMock ? Promise.resolve([] as HoneypotJob[]) : get<HoneypotJob[]>('/api/honeypots').catch(() => [] as HoneypotJob[]);
+
 export async function fetchAll(): Promise<LiveData> {
-  const [cves, events, stats, actors] = await Promise.all([fetchCves(), fetchEvents(), fetchStats(), fetchActors()]);
-  return { cves, events, stats, actors };
+  const [cves, events, stats, actors, honeypots] = await Promise.all([
+    fetchCves(),
+    fetchEvents(),
+    fetchStats(),
+    fetchActors(),
+    fetchHoneypots(),
+  ]);
+  return { cves, events, stats, actors, honeypots };
 }

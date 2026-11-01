@@ -89,4 +89,6 @@ export interface LiveData {
   events: AttackEvent[];
   stats: Stats;
   actors: Actor[];
+  /** Published honeypots (GET /api/honeypots); the dashboard shows one tab per CVE. */
+  honeypots: HoneypotJob[];
 }
