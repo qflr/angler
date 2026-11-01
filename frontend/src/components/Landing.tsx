@@ -1,3 +1,4 @@
+import { MODE, setMode } from '../data/mode';
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { TAGLINE } from '../data/config';
 import { minuteSeries } from '../data/derive';
@@ -78,6 +79,22 @@ export function Landing({ data, now, onEnter }: Props) {
           ))}
         </div>
       </section>
+
+      <div className="mode-toggle" role="radiogroup" aria-label="Data mode">
+        {(['live', 'demo'] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={MODE === m}
+            className={MODE === m ? 'is-on' : undefined}
+            onClick={() => MODE !== m && setMode(m)}
+          >
+            {m === 'live' ? 'Live' : 'Demo'}
+            <span>{m === 'live' ? 'Real decoy, real attackers' : 'Simulated traffic, any CVE'}</span>
+          </button>
+        ))}
+      </div>
 
       <button type="button" className={`landing-cta${snapping ? ' is-clicked' : ''}`} onClick={getStarted}>
         Get started <span aria-hidden>→</span>

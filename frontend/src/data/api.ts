@@ -1,10 +1,11 @@
-import { mockActors, mockCves, mockEvents, mockStats } from './mock';
+import { mockActors, mockCves, mockEvents, mockHoneypots, mockStats } from './mock';
+import { MODE } from './mode';
 import type { Actor, AttackEvent, Cve, HoneypotJob, LiveData, Stats } from './types';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
 
 /** True when no backend is configured and the dashboard runs on simulated traffic. */
-export const usingMock = !API_URL;
+export const usingMock = !API_URL || MODE === 'demo';
 
 const EVENT_LIMIT = 1000;
 
@@ -32,7 +33,7 @@ export const fetchActorDetail = (id: string) => get<ActorDetailData>(`/api/actor
 
 // Tabs are optional: an older backend without /api/honeypots just shows "All traffic".
 export const fetchHoneypots = () =>
-  usingMock ? Promise.resolve([] as HoneypotJob[]) : get<HoneypotJob[]>('/api/honeypots').catch(() => [] as HoneypotJob[]);
+  usingMock ? Promise.resolve(mockHoneypots()) : get<HoneypotJob[]>('/api/honeypots').catch(() => [] as HoneypotJob[]);
 
 export async function fetchAll(): Promise<LiveData> {
   const [cves, events, stats, actors, honeypots] = await Promise.all([

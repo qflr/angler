@@ -115,8 +115,8 @@ export default function App() {
             {updatedAt && Date.now() - updatedAt < 10_000 ? 'Just now' : 'Connecting…'}
           </Text>
           {usingMock && (
-            <Tooltip content="No backend configured (VITE_API_URL). Showing simulated traffic.">
-              <Badge>Simulated feed</Badge>
+            <Tooltip content="Demo mode: simulated traffic for presentation. Switch to Live on the home page for real decoy data.">
+              <Badge tone="attention">Demo mode</Badge>
             </Tooltip>
           )}
         </TitleGroup>

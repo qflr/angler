@@ -4,7 +4,7 @@
 // a CORS block), so the CVE-in flow keeps working against a backend with only the dashboard endpoints.
 
 import { usingMock } from './api';
-import { mockCves } from './mock';
+import { addDemoHoneypot, mockCves } from './mock';
 import type { HoneypotJob, HoneypotStatus } from './types';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
@@ -54,10 +54,32 @@ function mockView(id: string): HoneypotJob {
     ...job,
     status,
     advisory:
-      status === 'researching' || !known
+      status === 'researching'
         ? null
-        : { description: known.description, product: known.product, cvss: known.cvss, kev: known.kev },
+        : known
+          ? { description: known.description, product: known.product, cvss: known.cvss, kev: known.kev }
+          : demoAdvisory(job.cve_id),
   };
+}
+
+// Demo mode: a plausible advisory for any CVE, stable per ID.
+const DEMO_PRODUCTS = [
+  ['Ivanti Connect Secure', 'authentication bypass leading to remote command execution'],
+  ['Fortinet FortiOS SSL-VPN', 'heap overflow allowing unauthenticated code execution'],
+  ['Citrix NetScaler ADC', 'unauthenticated remote code execution in the gateway'],
+  ['Atlassian Confluence Data Center', 'template injection allowing remote code execution'],
+  ['Cisco IOS XE Web UI', 'privilege escalation via the web management interface'],
+  ['GitLab CE/EE', 'arbitrary file write via project import'],
+  ['Apache ActiveMQ', 'deserialization leading to remote code execution'],
+  ['Jenkins', 'arbitrary file read through the CLI parser'],
+] as const;
+
+function demoAdvisory(cveId: string) {
+  let h = 0;
+  for (const ch of cveId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const [product, flaw] = DEMO_PRODUCTS[h % DEMO_PRODUCTS.length];
+  const description = flaw[0].toUpperCase() + flaw.slice(1);
+  return { description, product, cvss: Math.round((8.1 + ((h >>> 4) % 19) / 10) * 10) / 10, kev: h % 3 === 0 };
 }
 
 // --- API ----------------------------------------------------------------------
@@ -84,5 +106,6 @@ export async function publishHoneypot(id: string): Promise<HoneypotJob> {
   if (!isSimulated(id)) return send('POST', `/api/honeypots/${id}/publish`);
   const entry = mockJobs.get(id)!;
   entry.job = { ...mockView(id), status: 'published', url: `/decoy.html?cve=${encodeURIComponent(entry.job.cve_id)}` };
+  addDemoHoneypot(entry.job);
   return { ...entry.job };
 }

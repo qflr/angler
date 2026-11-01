@@ -1195,3 +1195,10 @@ ul.actor-mono { margin: 0; padding-left: 0; list-style: none; display: grid; gap
 .actor-stage.stage-exploit { background: var(--angler-mauve); color: #fff; }
 .actor-muted { color: var(--angler-haze); font-size: 12px; }
 .actor-error { padding: 16px 22px; color: var(--angler-mauve); }
+
+/* Live / Demo switch on the landing page. */
+.mode-toggle { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 18px; border-radius: 12px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); }
+.mode-toggle button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 170px; padding: 8px 14px; border: 0; border-radius: 9px; background: none; color: var(--angler-gray); font: 600 14px/1.2 inherit; font-family: inherit; cursor: pointer; text-align: left; }
+.mode-toggle button span { font-weight: 400; font-size: 12px; opacity: 0.8; }
+.mode-toggle button.is-on { background: var(--angler-mauve); color: #fff; }
+.mode-toggle button:not(.is-on):hover { color: #fff; }

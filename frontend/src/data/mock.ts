@@ -1,6 +1,7 @@
 // Simulated backend so the dashboard runs before the FastAPI service exists.
 // Serves the same shapes as GET /api/cves, /api/events, /api/stats and /api/actors.
 
+import type { HoneypotJob } from './types';
 import type { Actor, AttackEvent, Classification, Cve, SourceTag, Stage, Stats } from './types';
 
 // --- deterministic randomness -------------------------------------------------
@@ -377,6 +378,39 @@ function advance(now: number) {
 
 function toEvent({ actor: _a, tags: _t, ...e }: MockHit): AttackEvent {
   return e;
+}
+
+// --- demo honeypots -----------------------------------------------------------
+
+const demoHoneypots: HoneypotJob[] = [];
+
+/** Demo publish: the CVE gets plausible probe/exploit traffic from the targeted actors. */
+export function addDemoHoneypot(job: HoneypotJob) {
+  if (!demoHoneypots.some((h) => h.cve_id === job.cve_id)) demoHoneypots.unshift(job);
+  if (CVES.some((c) => c.id === job.cve_id)) {
+    for (const a of ACTORS) if (a.cves.length && !a.cves.includes(job.cve_id)) a.cves.push(job.cve_id);
+    return;
+  }
+  const slug = job.cve_id.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  CVES.push({
+    id: job.cve_id,
+    description: job.advisory?.description ?? `${job.cve_id} remote code execution`,
+    product: job.advisory?.product ?? 'Unknown product',
+    severity: 'critical',
+    cvss: job.advisory?.cvss ?? 9.8,
+    status: job.advisory?.kev ? 'urgent' : 'high',
+    kev: !!job.advisory?.kev,
+    patch_status: 'unpatched',
+    published: new Date().toISOString(),
+    port: 443,
+    probe: { method: 'GET', path: `/api/v1/version?probe=${slug}` },
+    exploit: { method: 'POST', path: `/api/v1/upload?${slug}=1` },
+  });
+  for (const a of ACTORS) if (a.cves.length) a.cves.push(job.cve_id);
+}
+
+export function mockHoneypots(): HoneypotJob[] {
+  return [...demoHoneypots];
 }
 
 // --- endpoints ----------------------------------------------------------------

