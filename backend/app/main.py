@@ -16,7 +16,7 @@ import ipaddress
 from fastapi import Body, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import actors, classify, db, geoip, honeypots, triage
+from . import actors, classify, db, geoip, honeypots, insights, triage
 from .schemas import Actor, AttackEvent, Cve, Stats
 
 # Shared secret the honeypot sensor sends in X-Ingest-Key. Unset = ingest disabled.
@@ -357,3 +357,15 @@ def publish_honeypot(job_id: str):
     if not job:
         raise HTTPException(404, "no such job")
     return job
+
+
+@app.post("/api/insights")
+def explain_traffic(payload: dict = Body(...)):
+    """AI read of what the dashboard is showing. Body: {scope, events, actors} (the current tab's data)."""
+    events = payload.get("events") or []
+    if not isinstance(events, list) or not events:
+        raise HTTPException(422, "nothing to explain yet")
+    try:
+        return insights.explain(events, payload.get("actors") or [], str(payload.get("scope") or "All traffic")[:80])
+    except insights.InsightError as e:
+        raise HTTPException(503, str(e))
