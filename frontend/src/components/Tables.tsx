@@ -11,6 +11,23 @@ const STATUS_TONE: Record<Cve['status'], PillTone> = { urgent: 'strong', high: '
 const SEVERITY_TONE: Record<Cve['severity'], PillTone> = { critical: 'strong', high: 'mid', medium: 'soft', low: 'outline', unknown: 'outline' };
 const PATCH_TONE: Record<Cve['patch_status'], PillTone> = { patched: 'soft', partial: 'mid', unpatched: 'strong', unknown: 'outline' };
 const STATUS_RANK = { urgent: 0, high: 1, watch: 2 } as const;
+
+// Same set as backend classify.SIGNATURES. These are the only CVEs we can attribute a request to.
+const ANALYZABLE: { id: string; name: string; decoy: boolean }[] = [
+  { id: 'CVE-2023-1389', name: 'TP-Link Archer command injection', decoy: true },
+  { id: 'CVE-2017-9841', name: 'PHPUnit eval-stdin.php RCE', decoy: true },
+  { id: 'CVE-2021-41773', name: 'Apache path traversal', decoy: true },
+  { id: 'CVE-2024-4577', name: 'PHP-CGI argument injection', decoy: true },
+  { id: 'CVE-2021-44228', name: 'Log4Shell JNDI injection', decoy: false },
+  { id: 'CVE-2018-10561', name: 'GPON router auth bypass', decoy: false },
+  { id: 'CVE-2017-17215', name: 'Huawei HG532 UPnP RCE', decoy: false },
+  { id: 'CVE-2018-20062', name: 'ThinkPHP invokefunction RCE', decoy: false },
+  { id: 'CVE-2022-1388', name: 'F5 BIG-IP iControl auth bypass', decoy: false },
+  { id: 'CVE-2021-36260', name: 'Hikvision command injection', decoy: false },
+  { id: 'CVE-2024-3400', name: 'PAN-OS GlobalProtect command injection', decoy: false },
+  { id: 'CVE-2023-20198', name: 'Cisco IOS XE web UI privilege escalation', decoy: false },
+  { id: 'CVE-2014-6271', name: 'Shellshock', decoy: false },
+];
 const TAG_LABEL: Record<SourceTag, string> = {
   tor: 'Tor',
   vpn: 'VPN',
@@ -100,15 +117,16 @@ export function EventStream({ events, now }: { events: AttackEvent[]; now: numbe
 // --- CVE leaderboard ---------------------------------------------------------
 
 export function CveLeaderboard({ cves, hits }: { cves: Cve[]; hits: ReturnType<typeof hitsByCve> }) {
-  const rows = [...cves].sort(
+  const byId = new Map(cves.map((c) => [c.id, c]));
+  const rows = ANALYZABLE.map((known) => ({ ...known, cve: byId.get(known.id) })).sort(
     (a, b) =>
       (hits.get(b.id)?.targeted ?? 0) - (hits.get(a.id)?.targeted ?? 0) ||
-      STATUS_RANK[a.status] - STATUS_RANK[b.status],
+      (a.cve ? STATUS_RANK[a.cve.status] : 9) - (b.cve ? STATUS_RANK[b.cve.status] : 9),
   );
   return (
     <Card padding="0">
       <Box padding="400" paddingBlockEnd="200">
-        <CardTitle help="Tracked CVEs, ranked by targeted traffic against our decoys, then by triage status.">
+        <CardTitle help="Only CVEs we can recognize in a request. Decoy means this VM answers as that vulnerability. Hits are targeted, then every request we attributed to that CVE.">
           CVE leaderboard
         </CardTitle>
       </Box>
@@ -124,28 +142,34 @@ export function CveLeaderboard({ cves, hits }: { cves: Cve[]; hits: ReturnType<t
           { title: 'Hits', alignment: 'end' },
         ]}
       >
-        {rows.map((c, i) => {
-          const h = hits.get(c.id);
+        {rows.map((row, i) => {
+          const c = row.cve;
+          const h = hits.get(row.id);
+          const blurb = c ? `${c.product ? `${c.product} · ` : ''}${c.description}` : row.name;
           return (
-            <IndexTable.Row id={c.id} key={c.id} position={i}>
+            <IndexTable.Row id={row.id} key={row.id} position={i}>
               <IndexTable.Cell>
                 <BlockStack gap="050">
                   <InlineStack gap="150" blockAlign="center" wrap={false}>
                     <span className="mono" style={{ fontSize: 13, fontWeight: 600 }}>
-                      {c.id}
+                      {row.id}
                     </span>
-                    {c.kev && (
+                    {row.decoy && (
+                      <Tooltip content="The decoy answers this exploit. Other recognized CVEs are recorded, but the VM does not pretend to be that product.">
+                        <Pill tone="mid">Decoy</Pill>
+                      </Tooltip>
+                    )}
+                    {c?.kev && (
                       <Tooltip content="In CISA's Known Exploited Vulnerabilities catalog">
                         <Pill tone="strong">KEV</Pill>
                       </Tooltip>
                     )}
                   </InlineStack>
-                  <div style={{ maxWidth: 190 }}>
-                    <Tooltip content={c.description}>
+                  <div style={{ maxWidth: 220 }}>
+                    <Tooltip content={blurb}>
                       <div className="truncate">
                         <Text as="span" variant="bodySm" tone="subdued">
-                          {c.product ? `${c.product} · ` : ''}
-                          {c.description}
+                          {blurb}
                         </Text>
                       </div>
                     </Tooltip>
@@ -153,17 +177,21 @@ export function CveLeaderboard({ cves, hits }: { cves: Cve[]; hits: ReturnType<t
                 </BlockStack>
               </IndexTable.Cell>
               <IndexTable.Cell>
-                <Pill tone={STATUS_TONE[c.status] ?? 'outline'}>{cap(c.status)}</Pill>
+                {c ? <Pill tone={STATUS_TONE[c.status] ?? 'outline'}>{cap(c.status)}</Pill> : <Text as="span" tone="subdued">—</Text>}
               </IndexTable.Cell>
               <IndexTable.Cell>
-                <Tooltip content={`${cap(c.severity)}${c.cvss != null ? ` · CVSS ${c.cvss.toFixed(1)}` : ''}`}>
-                  <Pill tone={SEVERITY_TONE[c.severity] ?? 'outline'}>
-                    {c.cvss != null ? c.cvss.toFixed(1) : cap(c.severity)}
-                  </Pill>
-                </Tooltip>
+                {c ? (
+                  <Tooltip content={`${cap(c.severity)}${c.cvss != null ? ` · CVSS ${c.cvss.toFixed(1)}` : ''}`}>
+                    <Pill tone={SEVERITY_TONE[c.severity] ?? 'outline'}>
+                      {c.cvss != null ? c.cvss.toFixed(1) : cap(c.severity)}
+                    </Pill>
+                  </Tooltip>
+                ) : (
+                  <Text as="span" tone="subdued">—</Text>
+                )}
               </IndexTable.Cell>
               <IndexTable.Cell>
-                <Pill tone={PATCH_TONE[c.patch_status] ?? 'outline'}>{cap(c.patch_status)}</Pill>
+                {c ? <Pill tone={PATCH_TONE[c.patch_status] ?? 'outline'}>{cap(c.patch_status)}</Pill> : <Text as="span" tone="subdued">—</Text>}
               </IndexTable.Cell>
               <IndexTable.Cell>
                 <Text as="span" alignment="end" numeric>
