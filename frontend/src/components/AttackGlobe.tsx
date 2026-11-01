@@ -29,8 +29,9 @@ const LAND = (
 });
 
 const RECENT_MS = 2 * 60_000;
-const INDIGO = '#4137cb';
-const NOISE = '#8a90b8';
+const INDIGO = '#cc3535'; // targeted
+const HONEYPOT_COLOR = '#080505';
+const NOISE = '#f6f3f6'; // background noise: pale so it reads against the mauve hexes
 
 interface Marker {
   lat: number;
@@ -82,9 +83,9 @@ export const AttackGlobe = forwardRef<AttackGlobeHandle, Props>(function AttackG
   const material = useMemo(
     () =>
       new MeshPhongMaterial({
-        color: new Color('#bcd0f2'),
-        emissive: new Color('#c4d4f4'),
-        emissiveIntensity: 0.45,
+        color: new Color('#d6d7dc'),
+        emissive: new Color('#cbccd2'),
+        emissiveIntensity: 0.32,
         shininess: 14,
       }),
     [],
@@ -136,7 +137,7 @@ export const AttackGlobe = forwardRef<AttackGlobeHandle, Props>(function AttackG
           backgroundColor="rgba(0,0,0,0)"
           globeMaterial={material}
           showAtmosphere
-          atmosphereColor="#a9c4ff"
+          atmosphereColor="#b2b4bd"
           atmosphereAltitude={0.22}
           onGlobeReady={() => {
             globe.current?.pointOfView({ lat: 34, lng: -70, altitude: 1.8 });
@@ -148,29 +149,33 @@ export const AttackGlobe = forwardRef<AttackGlobeHandle, Props>(function AttackG
           hexPolygonResolution={HEX_RES}
           hexPolygonMargin={0.36}
           hexPolygonAltitude={0.004}
-          hexPolygonColor={() => 'rgba(70, 88, 228, 0.7)'}
+          hexPolygonColor={() => 'rgba(8, 5, 5, 0.6)'}
           ringsData={markers}
           ringLat={(d: any) => d.lat}
           ringLng={(d: any) => d.lng}
           ringColor={(d: any) => (t: number) =>
-            d.cls === 'noise' ? `rgba(130,136,170,${0.8 * (1 - t)})` : `rgba(65,55,203,${1 - t})`}
+            d.cls === 'noise'
+              ? `rgba(246, 243, 246,${0.9 * (1 - t)})`
+              : d.cls === 'honeypot'
+                ? `rgba(8,5,5,${1 - t})`
+                : `rgba(204,53,53,${1 - t})`}
           ringMaxRadius={(d: any) => (d.cls === 'honeypot' ? 6 : d.cls === 'targeted' ? 4 : 2.2)}
           ringPropagationSpeed={2}
           ringRepeatPeriod={(d: any) => (d.cls === 'honeypot' ? 2400 : d.cls === 'targeted' ? 900 : 1800)}
           pointsData={markers}
           pointLat={(d: any) => d.lat}
           pointLng={(d: any) => d.lng}
-          pointColor={(d: any) => (d.cls === 'noise' ? NOISE : INDIGO)}
+          pointColor={(d: any) => (d.cls === 'noise' ? NOISE : d.cls === 'honeypot' ? HONEYPOT_COLOR : INDIGO)}
           pointAltitude={(d: any) => (d.cls === 'honeypot' ? 0.06 : 0.012)}
           pointRadius={(d: any) => (d.cls === 'honeypot' ? 0.9 : d.cls === 'targeted' ? 0.6 : 0.48)}
           pointLabel={(d: any) =>
             d.cls === 'honeypot'
-              ? `<div style="font:12px Inter,sans-serif;padding:6px 8px;background:#fff;color:#0e0c25;border-radius:8px;box-shadow:0 4px 14px rgba(14,12,37,.15)"><b>${d.label}</b></div>`
-              : `<div style="font:12px Inter,sans-serif;padding:6px 8px;background:#fff;color:#0e0c25;border-radius:8px;box-shadow:0 4px 14px rgba(14,12,37,.15)">
+              ? `<div style="font:12px Inter,sans-serif;padding:6px 8px;background:#fff;color:#080505;border-radius:8px;box-shadow:0 4px 14px rgba(8,5,5,.15)"><b>${d.label}</b></div>`
+              : `<div style="font:12px Inter,sans-serif;padding:6px 8px;background:#fff;color:#080505;border-radius:8px;box-shadow:0 4px 14px rgba(8,5,5,.15)">
                <b>${d.ip}</b><br/>${d.place ? `${d.place}<br/>` : ''}${d.asn}${d.cveId ? `<br/><span style="color:${INDIGO}">${d.cveId}</span>` : ''}
              </div>`}
           arcsData={arcs}
-          arcColor={() => ['rgba(65,55,203,0.15)', 'rgba(65,55,203,0.95)']}
+          arcColor={() => ['rgba(86, 11, 11, 0.15)', 'rgba(204, 53, 53, 0.95)']}
           arcStroke={0.45}
           arcAltitudeAutoScale={0.35}
           arcDashLength={0.35}

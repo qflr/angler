@@ -2,35 +2,59 @@
    Doubled :root beats Polaris' own :root / .p-theme-light rules without !important. */
 
 :root:root {
-  /* Brand palette */
-  --angler-vintage-grape: #514d6d;
-  --angler-dusty-grape: #5e5b74;
-  --angler-bright-indigo: #4137cb;
-  --angler-prussian-blue: #0e0c25;
-  --angler-space-indigo: #31344a;
+  /* Brand palette (coolors: F6F3F6 · B2B4BD · 560B0B · CC3535 · 080505) */
+  --angler-ink: #080505; /* near-black */
+  --angler-plum: #560b0b; /* maroon */
+  --angler-mauve: #cc3535; /* signal red: the accent */
+  --angler-gray: #b2b4bd; /* cool gray */
+  --angler-lilac: #f6f3f6; /* off-white */
+  /* Not in the palette: a darker cut of the gray, because #B2B4BD is too light for text on white. */
+  --angler-haze: #5d5f68;
 
-  /* Supporting tints: icy surfaces derived from the indigo */
-  --angler-ice: #f3f5fb;
-  --angler-ice-deep: #e7ebf7;
-  --angler-indigo-soft: #e9e8fb;
-  --angler-indigo-mid: #8b84e6;
-  --angler-noise: #a3a8c3;
+  /* Roles. Older names kept so component styles read the same. */
+  --angler-prussian-blue: var(--angler-ink); /* darkest: dark surfaces, primary text */
+  --angler-space-indigo: var(--angler-plum);
+  --angler-vintage-grape: var(--angler-haze);
+  --angler-dusty-grape: var(--angler-haze); /* secondary text on light */
+  --angler-bright-indigo: var(--angler-mauve); /* accent fills on light surfaces */
+
+  /* Light tints for surfaces and the noise series */
+  --angler-ice: var(--angler-lilac);
+  --angler-ice-deep: #ebe8eb;
+  --angler-indigo-soft: #f7e4e4;
+  --angler-indigo-mid: var(--angler-gray);
+  --angler-noise: var(--angler-gray);
 
   --p-color-bg: var(--angler-ice);
   --p-color-bg-surface: #ffffff;
-  --p-color-bg-surface-secondary: #f6f7fc;
-  --p-color-bg-surface-hover: #f4f5fb;
+  --p-color-bg-surface-secondary: #f8f7f9;
+  --p-color-bg-surface-hover: #f3f3f6;
   --p-color-text: var(--angler-prussian-blue);
   --p-color-text-secondary: var(--angler-dusty-grape);
   --p-color-icon: var(--angler-vintage-grape);
-  --p-color-border: #d9dcea;
-  --p-color-border-secondary: #e6e8f2;
+  --p-color-border: #dcdde3;
+  --p-color-border-secondary: #e8e8ed;
   --p-color-text-link: var(--angler-bright-indigo);
   --p-color-bg-fill-brand: var(--angler-bright-indigo);
-  --p-color-bg-fill-brand-hover: #372eb4;
-  --p-color-bg-fill-brand-active: #2e2699;
+  --p-color-bg-fill-brand-hover: #560b0b;
+  --p-color-bg-fill-brand-active: #080505;
 
+  --angler-frost: var(--angler-gray); /* light text on Prussian Blue */
+  --angler-line-dark: rgba(246, 243, 246, 0.14);
+
+  /* Inter has no condensed width; Inter Tight is its narrow cut, used for the Angler wordmark. */
+  --angler-font-wordmark: 'Inter Tight', 'Inter', sans-serif;
+  --p-font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --p-font-family-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Flat, hairline-bordered cards instead of Polaris' bevelled shadow */
+  --p-shadow-100: 0 0 0 1px #dfe0e6;
+  --p-shadow-bevel-100: none;
+  --p-border-radius-300: 0.5rem;
+
+  --p-color-bg-fill-magic-secondary: var(--angler-indigo-soft);
+  --p-color-text-magic: var(--angler-bright-indigo);
+  --p-color-text-magic-secondary: var(--angler-bright-indigo);
 }
 
 html,
@@ -42,7 +66,14 @@ body,
 }
 
 body {
+  font-family: var(--p-font-family-sans);
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum' 1;
+}
+
+.Polaris-Badge.Polaris-Badge {
+  border-radius: 4px;
+  font-weight: 500;
 }
 
 /* --- shell ------------------------------------------------------------------ */
@@ -57,7 +88,57 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 20px;
+  padding: 10px 20px;
+  background: var(--angler-prussian-blue);
+  color: #fff;
+  border-bottom: 1px solid var(--angler-space-indigo);
+}
+
+/* Polaris pieces re-skinned for the dark bar */
+.topbar .Polaris-Text--root {
+  color: #f6f3f6;
+  white-space: nowrap;
+}
+.topbar .Polaris-Badge {
+  white-space: nowrap;
+}
+.topbar .Polaris-Icon svg {
+  fill: var(--angler-frost);
+}
+.topbar .Polaris-Button.Polaris-Button {
+  background: transparent;
+  box-shadow: none;
+}
+.topbar .Polaris-Button.Polaris-Button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.topbar .Polaris-Button.Polaris-Button[aria-pressed='true'],
+.topbar .Polaris-Button.Polaris-Button--pressed {
+  background: rgba(204, 53, 53, 0.55);
+}
+.topbar .Polaris-TextField__Backdrop {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--angler-line-dark);
+}
+.topbar .Polaris-TextField__Input {
+  color: #fff;
+}
+.topbar .Polaris-TextField__Input::placeholder {
+  color: var(--angler-frost);
+  opacity: 0.7;
+}
+.topbar .Polaris-Badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--angler-frost);
+}
+
+.brand {
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  text-align: left;
 }
 
 .topbar-right {
@@ -91,36 +172,37 @@ body {
 
 .brand-tagline {
   font-size: 12px;
-  color: var(--angler-dusty-grape);
+  color: var(--angler-frost);
   letter-spacing: 0.01em;
 }
 
 .brand-name {
-  font-weight: 650;
-  font-size: 17px;
-  letter-spacing: -0.01em;
-  color: var(--angler-prussian-blue);
+  font-family: var(--angler-font-wordmark);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: #fff;
 }
 
 .divider-dot {
   width: 1px;
-  height: 18px;
-  background: var(--p-color-border);
+  height: 22px;
+  background: var(--angler-line-dark);
 }
 
 .live-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--angler-bright-indigo);
-  box-shadow: 0 0 0 0 rgba(65, 55, 203, 0.45);
+  background: #f6f3f6;
+  box-shadow: 0 0 0 0 rgba(178, 180, 189, 0.45);
   animation: pulse 2s ease-out infinite;
 }
 
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(65, 55, 203, 0.45); }
-  70% { box-shadow: 0 0 0 7px rgba(65, 55, 203, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(65, 55, 203, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(178, 180, 189, 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(178, 180, 189, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(178, 180, 189, 0); }
 }
 
 .main {
@@ -174,10 +256,43 @@ body {
 
 /* --- cards ------------------------------------------------------------------ */
 
-.metric-title {
-  border-bottom: 1px dashed var(--p-color-border);
-  padding-bottom: 1px;
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.pill-strong { background: var(--angler-mauve); color: #fff; }
+.pill-mid { background: var(--angler-plum); color: #fff; }
+.pill-soft { background: var(--angler-ice-deep); color: var(--angler-plum); }
+.pill-outline { box-shadow: inset 0 0 0 1px #d3d5dc; color: var(--angler-mauve); }
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--angler-vintage-grape);
   cursor: help;
+}
+
+h3.eyebrow, p.metric-value { margin: 0; }
+
+.metric-value {
+  font-size: 30px;
+  font-weight: 200;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--angler-prussian-blue);
+}
+
+.metric-delta {
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .metric-row {
@@ -254,7 +369,7 @@ body {
 .bar-fill {
   height: 100%;
   border-radius: 4px;
-  background: linear-gradient(90deg, var(--angler-bright-indigo), #6c63e0);
+  background: linear-gradient(90deg, var(--angler-bright-indigo), #560b0b);
   transition: width 600ms ease;
 }
 
@@ -304,4 +419,588 @@ body {
     flex: 1;
     width: auto;
   }
+}
+
+/* --- landing ---------------------------------------------------------------- */
+
+.landing {
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 56px;
+  padding: 48px 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(60% 50% at 50% 38%, rgba(86, 11, 11, 0.6), transparent 70%),
+    radial-gradient(40% 35% at 80% 90%, rgba(178, 180, 189, 0.25), transparent 70%),
+    var(--angler-prussian-blue);
+}
+
+/* Faint hex lattice: the organic-precise texture behind the wordmark */
+.landing::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(246, 243, 246, 0.13) 1.2px, transparent 1.6px);
+  background-size: 22px 19px;
+  mask-image: radial-gradient(55% 55% at 50% 45%, #000 20%, transparent 75%);
+  pointer-events: none;
+}
+
+.landing > * {
+  position: relative;
+}
+
+.landing-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+  animation: rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.landing-fish {
+  width: clamp(120px, 16vw, 170px);
+  height: auto;
+  aspect-ratio: 588 / 308;
+  overflow: visible;
+  animation: drift 7s ease-in-out infinite;
+}
+
+/* Get started: the jaw slowly drops open, bites shut once, and the lure whips on its stalk
+   a beat behind the bite. Per-keyframe easing: slow, eased opening; fast snap. */
+.fish-jaw,
+.fish-lure {
+  transform-box: view-box;
+}
+.fish-jaw {
+  transform-origin: 180px 200px; /* mouth corner */
+}
+.fish-lure {
+  transform-origin: 193px 66px; /* where the stalk leaves the head */
+}
+
+.is-snapping .landing-fish {
+  animation: lunge var(--snap-ms) linear both;
+}
+.is-snapping .fish-jaw {
+  animation: snap var(--snap-ms) linear both;
+}
+.is-snapping .fish-lure {
+  animation: lure-swing var(--snap-ms) linear both;
+}
+
+/* positive = jaw closes, negative = jaw drops open */
+@keyframes snap {
+  0% { transform: rotate(0); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  42% { transform: rotate(-15deg); animation-timing-function: cubic-bezier(0.6, 0, 1, 1); }
+  52% { transform: rotate(5deg); animation-timing-function: ease-out; }
+  62%, 100% { transform: rotate(0); }
+}
+
+@keyframes lure-swing {
+  0% { transform: rotate(0); animation-timing-function: ease-in-out; }
+  42% { transform: rotate(-5deg); animation-timing-function: ease-out; }
+  58% { transform: rotate(15deg); animation-timing-function: ease-in-out; }
+  72% { transform: rotate(-8deg); animation-timing-function: ease-in-out; }
+  84% { transform: rotate(4deg); animation-timing-function: ease-in-out; }
+  93% { transform: rotate(-1.5deg); animation-timing-function: ease-in-out; }
+  100% { transform: rotate(0); }
+}
+
+@keyframes lunge {
+  0% { transform: none; animation-timing-function: ease-in-out; }
+  42% { transform: translateX(3px); animation-timing-function: cubic-bezier(0.6, 0, 1, 1); }
+  52% { transform: translateX(-9px); animation-timing-function: ease-out; }
+  66%, 100% { transform: none; }
+}
+
+@keyframes drift {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(-1.5deg); }
+}
+
+.landing-title {
+  margin: 0;
+  font-family: var(--angler-font-wordmark);
+  font-size: clamp(56px, 11vw, 120px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.landing-tagline {
+  margin: 0;
+  font-size: clamp(15px, 2vw, 18px);
+  font-weight: 400;
+  color: var(--angler-frost);
+}
+
+.ticker {
+  width: min(560px, 100%);
+  text-align: center;
+  animation: rise 900ms 200ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.ticker-stage {
+  position: relative;
+  height: 112px;
+}
+
+.ticker-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(8px);
+  filter: blur(4px);
+  transition: opacity 700ms ease, transform 700ms ease, filter 700ms ease;
+}
+
+.ticker-slide.is-active {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+.ticker-value {
+  font-size: clamp(44px, 8vw, 64px);
+  font-weight: 100;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.ticker-label {
+  font-size: 15px;
+  color: var(--angler-frost);
+}
+
+.ticker-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.ticker-dots button {
+  width: 22px;
+  height: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: var(--angler-line-dark);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.ticker-dots button.is-active::after {
+  content: '';
+  display: block;
+  height: 100%;
+  background: var(--angler-mauve);
+  animation: fill var(--slide-ms) linear both;
+}
+
+.landing-cta,
+.flow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 22px;
+  border-radius: 6px;
+  border: 1.5px solid var(--angler-lilac);
+  background: var(--angler-lilac);
+  color: var(--angler-ink);
+  font: 600 15px var(--p-font-family-sans);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(178, 180, 189, 0.35);
+  transition: transform 150ms ease, background 180ms ease, color 180ms ease, border-color 180ms ease,
+    box-shadow 180ms ease;
+  white-space: nowrap;
+}
+.landing-cta {
+  /* backwards, not both: a held final keyframe would pin transform and block hover/press */
+  animation: rise 900ms 400ms cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+.landing-cta span,
+.flow-btn span {
+  display: inline-block;
+  transition: transform 180ms ease;
+}
+
+/* Hover: hollow, white outline (shared by every button on the dark pages) */
+.landing-cta:hover,
+.flow-btn:hover {
+  background: transparent;
+  border-color: #ffffff;
+  color: #ffffff;
+  box-shadow: none;
+  transform: translateY(-1px);
+}
+.landing-cta:hover span,
+.flow-btn:hover span {
+  transform: translateX(3px);
+}
+
+/* Press */
+.landing-cta:active,
+.flow-btn:active {
+  transform: scale(0.96);
+}
+
+/* Clicked: steel-blue fill, a quick press-and-release, arrow darts forward */
+.landing-cta.is-clicked,
+.flow-btn.is-clicked,
+.landing-cta.is-clicked:hover,
+.flow-btn.is-clicked:hover {
+  background: var(--angler-mauve);
+  border-color: var(--angler-mauve);
+  color: #ffffff;
+  box-shadow: 0 0 0 6px rgba(204, 53, 53, 0.35);
+  cursor: default;
+  animation: cta-press 420ms cubic-bezier(0.3, 0, 0.2, 1);
+}
+.landing-cta.is-clicked span,
+.flow-btn.is-clicked span {
+  transform: translateX(6px);
+}
+
+@keyframes cta-press {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.93); }
+  65% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+.landing-cta:focus-visible,
+.flow-btn:focus-visible {
+  outline: 2px solid var(--angler-gray);
+  outline-offset: 3px;
+}
+
+.landing .site-footer {
+  position: absolute;
+  bottom: 18px;
+  left: 16px;
+  right: 16px;
+}
+
+/* --- site footer ------------------------------------------------------------ */
+
+.site-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 20px 0 4px;
+  font-size: 12px;
+  color: var(--angler-dusty-grape);
+}
+
+.site-footer img {
+  width: 22px;
+  height: 22px;
+}
+
+.site-footer-name {
+  font-family: var(--angler-font-wordmark);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  color: var(--angler-prussian-blue);
+}
+
+.site-footer-sep {
+  width: 1px;
+  height: 12px;
+  background: currentColor;
+  opacity: 0.35;
+}
+
+.site-footer-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+}
+
+.site-footer-dark {
+  color: var(--angler-frost);
+}
+.site-footer-dark .site-footer-name {
+  color: #fff;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes fill {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-slide { transition: opacity 300ms ease; transform: none; filter: none; }
+  .landing-mark, .ticker, .landing-cta, .landing-cta.is-clicked, .flow-btn, .flow-btn.is-clicked, .landing-fish { animation: none; }
+  .ticker-dots button.is-active::after { animation: none; width: 100%; }
+}
+
+/* --- CVE in: honeypot pipeline ---------------------------------------------- */
+
+.flow {
+  position: relative;
+  min-height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 16px 20px;
+  color: #fff;
+  background:
+    radial-gradient(50% 40% at 50% 20%, rgba(86, 11, 11, 0.55), transparent 70%),
+    var(--angler-prussian-blue);
+}
+
+.flow-home {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  text-decoration: none;
+}
+.flow-home img {
+  width: 44px;
+  height: auto;
+}
+
+.flow-panel {
+  width: min(560px, 100%);
+  margin-top: clamp(32px, 9vh, 96px);
+  animation: rise 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.flow-step-label {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--angler-mauve);
+}
+
+.flow-title {
+  margin: 0 0 24px;
+  font-size: clamp(26px, 4vw, 34px);
+  font-weight: 200;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.cve-form {
+  display: flex;
+  gap: 10px;
+}
+
+.cve-input {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--angler-line-dark);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font: 500 17px var(--p-font-family-mono);
+  letter-spacing: 0.02em;
+  outline: none;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.cve-input::placeholder {
+  color: rgba(246, 243, 246, 0.4);
+}
+.cve-input:focus {
+  border-color: var(--angler-mauve);
+  background: rgba(255, 255, 255, 0.08);
+}
+.cve-input:disabled {
+  color: var(--angler-frost);
+}
+
+.link-btn:focus-visible {
+  outline: 2px solid var(--angler-gray);
+  outline-offset: 3px;
+}
+.flow-btn:disabled {
+  cursor: default;
+}
+
+.publish-btn.is-published,
+.publish-btn.is-published:hover {
+  background: #d3f4dc;
+  border-color: #d3f4dc;
+  color: #14532d;
+  box-shadow: none;
+  transform: none;
+  animation: cta-press 420ms cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+.flow-error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #ffb4a8;
+}
+
+.pipeline {
+  list-style: none;
+  margin: 32px 0 0;
+  padding: 0;
+}
+
+.pipe-step {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  padding-bottom: 22px;
+  animation: rise 500ms ease both;
+}
+.pipe-step:nth-child(2) { animation-delay: 80ms; }
+.pipe-step:nth-child(3) { animation-delay: 160ms; }
+.pipe-step:nth-child(4) { animation-delay: 240ms; }
+
+/* Connector between nodes */
+.pipe-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 30px;
+  bottom: 2px;
+  width: 1px;
+  background: var(--angler-line-dark);
+}
+.pipe-step.is-done:not(:last-child)::before {
+  background: rgba(246, 243, 246, 0.6);
+}
+
+.pipe-node {
+  flex: none;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  border: 1px solid var(--angler-line-dark);
+  color: #fff;
+  transition: background 300ms ease, border-color 300ms ease;
+}
+.is-active .pipe-node {
+  border-color: var(--angler-mauve);
+  box-shadow: 0 0 0 5px rgba(204, 53, 53, 0.25);
+}
+.is-done .pipe-node {
+  background: var(--angler-lilac);
+  border-color: var(--angler-lilac);
+  color: var(--angler-ink);
+}
+
+.spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid rgba(246, 243, 246, 0.3);
+  border-top-color: #f6f3f6;
+  animation: spin 800ms linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.pipe-body {
+  flex: 1;
+  min-width: 0;
+  padding-top: 3px;
+}
+
+.pipe-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pipe-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.is-pending .pipe-title {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.pipe-status {
+  font-size: 12px;
+  color: var(--angler-frost);
+}
+.is-active .pipe-status {
+  color: #f6f3f6;
+}
+
+.pipe-detail {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--angler-frost);
+  opacity: 0.85;
+}
+.is-pending .pipe-detail {
+  opacity: 0.45;
+}
+
+.flow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+  animation: rise 500ms ease both;
+}
+
+.flow-note {
+  margin: 16px 0 0;
+  font-size: 13px;
+  color: var(--angler-frost);
+}
+
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #f6f3f6;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.flow .site-footer {
+  margin-top: auto;
+  padding-top: 48px;
+}
+
+@media (max-width: 480px) {
+  .cve-form { flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-panel, .pipe-step, .flow-actions { animation: none; }
+  .spinner { animation-duration: 2s; }
 }

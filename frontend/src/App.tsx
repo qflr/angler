@@ -1,12 +1,15 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Banner, BlockStack, Button, Icon, InlineGrid, SkeletonBodyText, Card, Text, TextField, Tooltip } from '@shopify/polaris';
 import { GlobeIcon, HideIcon, MaximizeIcon, SearchIcon, ViewIcon } from '@shopify/polaris-icons';
 import { AttackGlobe, type AttackGlobeHandle } from './components/AttackGlobe';
+import { Landing } from './components/Landing';
+import { NewHoneypot } from './components/NewHoneypot';
+import { SiteFooter } from './components/SiteFooter';
 import { MetricCard } from './components/MetricCard';
 import { BehaviorCard, LocationCard, NoiseCard } from './components/Panels';
 import { ActorsCard, CveLeaderboard, EventStream } from './components/Tables';
 import { usingMock } from './data/api';
-import { HONEYPOT, TAGLINE } from './data/config';
+import { HONEYPOT } from './data/config';
 import { hitsByCve, minuteSeries, stageBreakdown, topLocations } from './data/derive';
 import { useLive } from './data/useLive';
 import type { AttackEvent } from './data/types';
@@ -16,8 +19,24 @@ const matches = (e: AttackEvent, q: string) =>
     f?.toLowerCase().includes(q),
   );
 
+// "#/new" is CVE in (the honeypot pipeline), "#/live" the dashboard, anything else the landing page.
+type View = 'landing' | 'new' | 'live';
+const viewFromHash = (): View =>
+  window.location.hash === '#/live' ? 'live' : window.location.hash === '#/new' ? 'new' : 'landing';
+
+function useView() {
+  const [view, setView] = useState(viewFromHash);
+  useEffect(() => {
+    const onHash = () => setView(viewFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  return view;
+}
+
 export default function App() {
   const { data, error, updatedAt } = useLive();
+  const view = useView();
   const globe = useRef<AttackGlobeHandle>(null);
   const [query, setQuery] = useState('');
   const [showNoise, setShowNoise] = useState(true);
@@ -48,16 +67,20 @@ export default function App() {
     };
   }, [data, now]);
 
+  if (view === 'landing') {
+    return <Landing data={data} now={now} onEnter={() => (window.location.hash = '#/new')} />;
+  }
+  if (view === 'new') {
+    return <NewHoneypot onViewDashboard={() => (window.location.hash = '#/live')} />;
+  }
+
   return (
     <div className="shell">
       <header className="topbar">
-        <div className="brand">
-          <img src="/angler-logo.png" alt="" />
-          <div className="brand-text">
-            <span className="brand-name">Angler</span>
-            <span className="brand-tagline">{TAGLINE}</span>
-          </div>
-        </div>
+        <button type="button" className="brand" onClick={() => (window.location.hash = '')} aria-label="Angler home">
+          <img src="/angler-logo.png?v=6" alt="" />
+          <span className="brand-name">Angler</span>
+        </button>
         <span className="divider-dot" />
         <TitleGroup>
           <Icon source={GlobeIcon} tone="subdued" />
@@ -154,6 +177,7 @@ export default function App() {
                 <ActorsCard actors={data.actors} now={now} />
                 {derived.stages.any && <BehaviorCard breakdown={derived.stages} />}
                 {derived.locations.length > 0 && <LocationCard locations={derived.locations} />}
+                <SiteFooter />
               </>
             )}
           </BlockStack>
@@ -171,7 +195,7 @@ export default function App() {
               </span>
             )}
             <span className="legend-chip">
-              <span className="swatch" style={{ background: '#fff', boxShadow: '0 0 0 3px #4137cb inset' }} /> Honeypot
+              <span className="swatch" style={{ background: '#fff', boxShadow: '0 0 0 3px #080505 inset' }} /> Honeypot
             </span>
           </div>
         </section>

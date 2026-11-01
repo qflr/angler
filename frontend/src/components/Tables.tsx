@@ -1,13 +1,15 @@
 import { useRef } from 'react';
-import { Badge, BlockStack, Box, Card, IndexTable, InlineStack, Text, Tooltip } from '@shopify/polaris';
+import { BlockStack, Box, Card, IndexTable, InlineStack, Text, Tooltip } from '@shopify/polaris';
 import type { hitsByCve } from '../data/derive';
 import type { Actor, AttackEvent, Classification, Cve, SourceTag } from '../data/types';
 import { CardTitle } from './Panels';
+import { Pill, type PillTone } from './Pill';
 import { ago, clock, flag } from './format';
 
-const STATUS_TONE = { urgent: 'critical', high: 'warning', watch: 'info' } as const;
-const SEVERITY_TONE = { critical: 'critical-strong', high: 'warning', medium: 'attention', low: undefined } as const;
-const PATCH_TONE = { patched: 'success', partial: 'attention', unpatched: 'critical' } as const;
+// Severity reads as darkness: ink is most urgent, lilac tint least.
+const STATUS_TONE: Record<Cve['status'], PillTone> = { urgent: 'strong', high: 'mid', watch: 'soft' };
+const SEVERITY_TONE: Record<Cve['severity'], PillTone> = { critical: 'strong', high: 'mid', medium: 'soft', low: 'outline', unknown: 'outline' };
+const PATCH_TONE: Record<Cve['patch_status'], PillTone> = { patched: 'soft', partial: 'mid', unpatched: 'strong', unknown: 'outline' };
 const STATUS_RANK = { urgent: 0, high: 1, watch: 2 } as const;
 const TAG_LABEL: Record<SourceTag, string> = {
   tor: 'Tor',
@@ -17,10 +19,11 @@ const TAG_LABEL: Record<SourceTag, string> = {
   scanner: 'Known scanner',
 };
 
-const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+const cap = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : '—');
+// Values outside the contract (e.g. a backend sending patch_status "unknown") fall back to an outline pill.
 
 export function ClassBadge({ cls }: { cls: Classification }) {
-  return cls === 'targeted' ? <Badge tone="magic">Targeted</Badge> : <Badge>Noise</Badge>;
+  return cls === 'targeted' ? <Pill tone="strong">Targeted</Pill> : <Pill tone="outline">Noise</Pill>;
 }
 
 // --- Live event stream -------------------------------------------------------
@@ -133,9 +136,7 @@ export function CveLeaderboard({ cves, hits }: { cves: Cve[]; hits: ReturnType<t
                     </span>
                     {c.kev && (
                       <Tooltip content="In CISA's Known Exploited Vulnerabilities catalog">
-                        <Badge tone="critical" size="small">
-                          KEV
-                        </Badge>
+                        <Pill tone="strong">KEV</Pill>
                       </Tooltip>
                     )}
                   </InlineStack>
@@ -152,17 +153,17 @@ export function CveLeaderboard({ cves, hits }: { cves: Cve[]; hits: ReturnType<t
                 </BlockStack>
               </IndexTable.Cell>
               <IndexTable.Cell>
-                <Badge tone={STATUS_TONE[c.status]}>{cap(c.status)}</Badge>
+                <Pill tone={STATUS_TONE[c.status] ?? 'outline'}>{cap(c.status)}</Pill>
               </IndexTable.Cell>
               <IndexTable.Cell>
                 <Tooltip content={`${cap(c.severity)}${c.cvss != null ? ` · CVSS ${c.cvss.toFixed(1)}` : ''}`}>
-                  <Badge tone={SEVERITY_TONE[c.severity]}>
+                  <Pill tone={SEVERITY_TONE[c.severity] ?? 'outline'}>
                     {c.cvss != null ? c.cvss.toFixed(1) : cap(c.severity)}
-                  </Badge>
+                  </Pill>
                 </Tooltip>
               </IndexTable.Cell>
               <IndexTable.Cell>
-                <Badge tone={PATCH_TONE[c.patch_status]}>{cap(c.patch_status)}</Badge>
+                <Pill tone={PATCH_TONE[c.patch_status] ?? 'outline'}>{cap(c.patch_status)}</Pill>
               </IndexTable.Cell>
               <IndexTable.Cell>
                 <Text as="span" alignment="end" numeric>
@@ -226,14 +227,14 @@ export function ActorsCard({ actors, now }: { actors: Actor[]; now: number }) {
                 </Text>
                 <InlineStack gap="100" wrap>
                   {(a.tags ?? []).map((t) => (
-                    <Badge key={t} size="small">
+                    <Pill key={t} tone="outline">
                       {TAG_LABEL[t]}
-                    </Badge>
+                    </Pill>
                   ))}
                   {(a.cves ?? []).map((c) => (
-                    <Badge key={c} size="small" tone="magic">
+                    <Pill key={c} tone="soft">
                       {c}
-                    </Badge>
+                    </Pill>
                   ))}
                 </InlineStack>
               </BlockStack>

@@ -5,4 +5,4 @@ export const HONEYPOT = {
   label: (import.meta.env.VITE_HONEYPOT_LABEL as string | undefined) ?? 'Honeypot · Render Ohio',
 };
 
-export const TAGLINE = 'Attackers need a target. We automate fake ones.';
+export const TAGLINE = 'Attackers need a target. We automate intuitive decoys.';

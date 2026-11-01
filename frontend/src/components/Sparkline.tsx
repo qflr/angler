@@ -6,7 +6,7 @@ interface Props {
   wide?: boolean;
 }
 
-export function Sparkline({ data, color = '#4137cb', wide }: Props) {
+export function Sparkline({ data, color = '#560b0b', wide }: Props) {
   const points = data.map((v, i) => ({ i, v }));
   return (
     <div className={wide ? 'spark spark-wide' : 'spark'}>

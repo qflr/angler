@@ -8,11 +8,7 @@ function CardTitle({ children, help }: { children: string; help: string }) {
   return (
     <InlineStack>
       <Tooltip content={help}>
-        <span className="metric-title">
-          <Text as="h3" variant="headingSm">
-            {children}
-          </Text>
-        </span>
+        <h3 className="eyebrow">{children}</h3>
       </Tooltip>
     </InlineStack>
   );
@@ -40,9 +36,7 @@ export function NoiseCard({ series }: { series: SeriesPoint[] }) {
                 Background noise
               </Text>
             </InlineStack>
-            <Text as="p" variant="headingLg">
-              {Math.round((noise / total) * 100)}%
-            </Text>
+            <p className="metric-value">{Math.round((noise / total) * 100)}%</p>
           </BlockStack>
           <BlockStack gap="100">
             <InlineStack gap="200" blockAlign="center">
@@ -51,9 +45,7 @@ export function NoiseCard({ series }: { series: SeriesPoint[] }) {
                 Targeting our CVEs
               </Text>
             </InlineStack>
-            <Text as="p" variant="headingLg">
-              {Math.round((targeted / total) * 100)}%
-            </Text>
+            <p className="metric-value">{Math.round((targeted / total) * 100)}%</p>
           </BlockStack>
         </InlineStack>
         <div className="split-bar">
@@ -65,22 +57,22 @@ export function NoiseCard({ series }: { series: SeriesPoint[] }) {
             <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
               <defs>
                 <linearGradient id="gTargeted" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#4137cb" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#4137cb" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor="#cc3535" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#cc3535" stopOpacity={0.02} />
                 </linearGradient>
                 <linearGradient id="gNoise" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#a3a8c3" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#a3a8c3" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor="#b2b4bd" stopOpacity={0.6} />
+                  <stop offset="100%" stopColor="#b2b4bd" stopOpacity={0.05} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#5e5b74' }} tickLine={false} axisLine={false} interval={9} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#5e5b74' }} tickLine={false} axisLine={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#5d5f68' }} tickLine={false} axisLine={false} interval={9} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#5d5f68' }} tickLine={false} axisLine={false} />
               <ChartTooltip
-                contentStyle={{ borderRadius: 10, border: '1px solid #e6e8f2', fontSize: 12 }}
-                labelStyle={{ color: '#0e0c25', fontWeight: 600 }}
+                contentStyle={{ borderRadius: 10, border: '1px solid #e8e8ed', fontSize: 12 }}
+                labelStyle={{ color: '#080505', fontWeight: 600 }}
               />
-              <Area type="monotone" dataKey="noise" name="Noise" stackId="1" stroke="#a3a8c3" fill="url(#gNoise)" strokeWidth={1.5} isAnimationActive={false} />
-              <Area type="monotone" dataKey="targeted" name="Targeted" stackId="1" stroke="#4137cb" fill="url(#gTargeted)" strokeWidth={1.75} isAnimationActive={false} />
+              <Area type="monotone" dataKey="noise" name="Noise" stackId="1" stroke="#b2b4bd" fill="url(#gNoise)" strokeWidth={1.5} isAnimationActive={false} />
+              <Area type="monotone" dataKey="targeted" name="Targeted" stackId="1" stroke="#cc3535" fill="url(#gTargeted)" strokeWidth={1.75} isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -111,9 +103,7 @@ export function BehaviorCard({ breakdown }: { breakdown: ReturnType<typeof stage
               <Text as="p" variant="bodyMd">
                 {s.label}
               </Text>
-              <Text as="p" variant="headingLg">
-                {breakdown.counts[s.key]}
-              </Text>
+              <p className="metric-value">{breakdown.counts[s.key]}</p>
               <div className="stage-meter">
                 <span style={{ width: `${(breakdown.counts[s.key] / max) * 100}%` }} />
               </div>

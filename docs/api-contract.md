@@ -157,3 +157,50 @@ Attacker dossiers: multiple IPs collapsed into one actor using shared fingerprin
   }
 ]
 ```
+
+---
+
+## Proposed: honeypot build pipeline
+
+*Added by the frontend for the CVE-in flow; not built on the backend yet. The frontend simulates
+these until they exist (`frontend/src/data/honeypot.ts`). Push back on shape or naming here before
+implementing.*
+
+The flow: user pastes a CVE → **research** (verified advisories, PoCs) → **build** (generate the
+vulnerable app) → **contain** (isolated, hollow, no egress, disposable) → **ready** → user clicks
+publish → **published** (decoy is live; exploit verification and attacker tracking begin, and the
+dashboard endpoints above start reporting its traffic).
+
+All three endpoints return a `HoneypotJob`:
+
+| field | type | notes |
+|---|---|---|
+| `id` | string | `"hp_8f3k2"` |
+| `cve_id` | string | |
+| `status` | `"researching" \| "building" \| "containing" \| "ready" \| "published" \| "failed"` | |
+| `advisory` | object | *optional.* `{ description, product, cvss, kev }` once research finds it |
+| `url` | string | *optional.* Public decoy URL, set when `published` |
+| `error` | string | *optional.* Reason when `failed` |
+
+### `POST /api/honeypots`
+
+Body `{ "cve_id": "CVE-2024-3400" }`. Starts the pipeline and returns the job (status `researching`).
+
+### `GET /api/honeypots/{id}`
+
+Current job state. The frontend polls this every 800 ms until `ready`, `published` or `failed`.
+
+### `POST /api/honeypots/{id}/publish`
+
+Only valid when `status` is `ready`. Exposes the contained decoy and returns the job with
+`status: "published"` and `url` set. The frontend opens `url` in a new tab.
+
+```json
+{
+  "id": "hp_8f3k2",
+  "cve_id": "CVE-2024-3400",
+  "status": "published",
+  "advisory": { "description": "GlobalProtect OS command injection", "product": "Palo Alto PAN-OS", "cvss": 10.0, "kev": true },
+  "url": "https://decoy-8f3k2.onrender.com/"
+}
+```

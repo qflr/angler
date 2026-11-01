@@ -22,22 +22,18 @@ export function MetricCard({ title, help, value, delta, upIsBad, spark, sparkCol
       <BlockStack gap="200">
         <InlineStack>
           <Tooltip content={help}>
-            <span className="metric-title">
-              <Text as="h3" variant="headingSm">
-                {title}
-              </Text>
-            </span>
+            <h3 className="eyebrow">{title}</h3>
           </Tooltip>
         </InlineStack>
         <div className="metric-row">
           <InlineStack gap="150" blockAlign="baseline">
-            <Text as="p" variant="headingLg">
-              {value}
-            </Text>
+            <p className="metric-value">{value}</p>
             {showDelta && (
-              <Text as="span" variant="bodySm" tone={tone as any}>
-                {delta! > 0 ? '↗' : '↘'} {Math.abs(delta!)}%
-              </Text>
+              <span className="metric-delta">
+                <Text as="span" tone={tone as any}>
+                  {delta! > 0 ? '↗' : '↘'} {Math.abs(delta!)}%
+                </Text>
+              </span>
             )}
           </InlineStack>
           {spark && <Sparkline data={spark} color={sparkColor} wide={wide} />}

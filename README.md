@@ -1,6 +1,6 @@
 # Angler
 
-*Attackers need a target. We automate fake ones.*
+*Attackers need a target. We automate intuitive decoys.*
 
 CVE in, honeypot out: a new CVE goes public, Angler stands up a contained decoy that impersonates
 the vulnerable software, and every hit lands on a live threat-intel dashboard, tagged as

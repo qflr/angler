@@ -12,10 +12,10 @@ export type SourceTag = 'tor' | 'vpn' | 'cloud' | 'residential' | 'scanner';
 export interface Cve {
   id: string;
   description: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'unknown';
   status: 'urgent' | 'high' | 'watch';
   kev: boolean;
-  patch_status: 'patched' | 'partial' | 'unpatched';
+  patch_status: 'patched' | 'partial' | 'unpatched' | 'unknown';
   cvss?: number | null;
   product?: string | null;
   published?: string | null;
@@ -67,6 +67,21 @@ export interface Actor {
   tags?: SourceTag[] | null;
   timezone?: string | null;
   cves?: string[] | null;
+}
+
+/** Pipeline stage of a honeypot build: research -> build -> contain -> ready -> published. */
+export type HoneypotStatus = 'researching' | 'building' | 'containing' | 'ready' | 'published' | 'failed';
+
+/** POST /api/honeypots, GET /api/honeypots/{id}, POST /api/honeypots/{id}/publish -> HoneypotJob */
+export interface HoneypotJob {
+  id: string;
+  cve_id: string;
+  status: HoneypotStatus;
+  /** Filled in once research finds an advisory. */
+  advisory?: Pick<Cve, 'description' | 'product' | 'cvss' | 'kev'> | null;
+  /** Public URL of the decoy; set when published. */
+  url?: string | null;
+  error?: string | null;
 }
 
 export interface LiveData {
