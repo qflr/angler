@@ -11,6 +11,15 @@ The TypeScript source of truth is `frontend/src/data/types.ts`. Keep the two in 
 
 ---
 
+## Changelog
+
+- **Nov 1, Phase 3 (backend live on real data):** `severity` and `patch_status` gained an `"unknown"`
+  value. The backend never guesses a band or claims "unpatched" without a source. **Frontend: add
+  `| 'unknown'` to both unions in `frontend/src/data/types.ts`.** The current Badge maps already render
+  it as a neutral "Unknown" badge. `/api/cves` also accepts `?limit=` (default 500, urgent first).
+  `/api/events` and `/api/actors` are empty until the honeypot is live; `/api/stats` counts are real.
+- Live API: `https://angler-api.onrender.com` (pipeline health at `/status`).
+
 ## `GET /api/cves`
 
 CVE records the system is tracking or impersonating. Returns a JSON array.
@@ -19,10 +28,10 @@ CVE records the system is tracking or impersonating. Returns a JSON array.
 |---|---|---|
 | `id` | string | `"CVE-2024-3400"` |
 | `description` | string | One-line summary |
-| `severity` | `"critical" \| "high" \| "medium" \| "low"` | CVSS severity band |
-| `status` | `"urgent" \| "high" \| "watch"` | Our triage priority |
+| `severity` | `"critical" \| "high" \| "medium" \| "low" \| "unknown"` | CVSS severity band. `unknown` = no CVSS score published yet (common for CVEs under a day old) |
+| `status` | `"urgent" \| "high" \| "watch"` | Our triage priority: `urgent` = in CISA KEV; `high` = no complete fix + code execution + remotely reachable + CVSS ≥ 7; else `watch` |
 | `kev` | boolean | Listed in CISA Known Exploited Vulnerabilities |
-| `patch_status` | `"patched" \| "partial" \| "unpatched"` | Whether a vendor fix exists |
+| `patch_status` | `"patched" \| "partial" \| "unpatched" \| "unknown"` | Whether a vendor fix exists. `unknown` = no source (OSV, GitHub Advisories, the CVE record) says either way |
 | `cvss` | number | *optional.* Base score, e.g. `10.0` |
 | `product` | string | *optional.* `"Palo Alto PAN-OS"` |
 | `published` | string | *optional.* ISO timestamp |

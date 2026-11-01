@@ -10,7 +10,7 @@ databases:
     plan: 0.1c-256mb
 
 services:
-  # Dashboard API (FastAPI). Serves the contract fixtures until ANGLER_DATA_SOURCE=db (Phase 3).
+  # Dashboard API (FastAPI). Serves real pipeline data from angler-db.
   - type: web
     name: angler-api
     runtime: python
@@ -26,8 +26,6 @@ services:
         fromDatabase:
           name: angler-db
           property: connectionString
-      - key: ANGLER_DATA_SOURCE
-        value: fixture
       - key: FRONTEND_ORIGINS
         sync: false
 

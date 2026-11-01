@@ -1,21 +1,25 @@
-"""Angler API: serves the dashboard contract in docs/api-contract.md."""
+"""Angler API: serves the dashboard contract in docs/api-contract.md from the pipeline's database.
+
+Everything returned is real: CVEs from cvelistV5 + enrichment, hits from the honeypot. No hits yet
+means empty lists and zero counts, never placeholders.
+"""
 
 import json
 import os
+import re
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import db, fixtures
+from . import db, triage
 from .schemas import Actor, AttackEvent, Cve, Stats
-
-# "fixture" serves the contract examples (Phase 0). "db" will read real pipeline data (Phase 3).
-DATA_SOURCE = os.getenv("ANGLER_DATA_SOURCE", "fixture")
 
 # Comma-separated extra origins, e.g. the frontend's Render static-site URL once it exists.
 FRONTEND_ORIGINS = [o.strip().rstrip("/") for o in os.getenv("FRONTEND_ORIGINS", "").split(",") if o.strip()]
 
-app = FastAPI(title="Angler API", version="0.1.0")
+app = FastAPI(title="Angler API", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,13 +35,21 @@ app.add_middleware(
 async def tag_data_source(request, call_next):
     response = await call_next(request)
     if request.url.path.startswith("/api/"):
-        response.headers["X-Angler-Data-Source"] = DATA_SOURCE
+        response.headers["X-Angler-Data-Source"] = "db"
     return response
+
+
+def _cutoff(window: str) -> str:
+    m = re.fullmatch(r"(\d+)([hd])", window)
+    if not m:
+        raise HTTPException(422, "window must look like 24h or 7d")
+    hours = int(m.group(1)) * (24 if m.group(2) == "d" else 1)
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @app.get("/")
 def root():
-    return {"service": "angler-api", "data_source": DATA_SOURCE, "docs": "/docs"}
+    return {"service": "angler-api", "data_source": "db", "docs": "/docs", "status": "/status"}
 
 
 @app.get("/healthz")
@@ -53,34 +65,133 @@ def pipeline_status():
         last = conn.execute(
             "SELECT started_at, finished_at, since, cursor, counts_json FROM ingest_runs ORDER BY id DESC LIMIT 1"
         ).fetchone()
+        count = lambda sql: conn.execute(sql).fetchone()["n"]  # noqa: E731
         return {
             "database": "postgres" if conn.pg else "sqlite",
-            "cves": conn.execute("SELECT COUNT(*) AS n FROM cves").fetchone()["n"],
-            "kev": conn.execute("SELECT COUNT(*) AS n FROM cves WHERE kev = 1").fetchone()["n"],
-            "patch_checked": conn.execute("SELECT COUNT(*) AS n FROM cves WHERE patch_checked_at IS NOT NULL").fetchone()["n"],
-            "pending": conn.execute("SELECT COUNT(*) AS n FROM ingest_pending").fetchone()["n"],
-            "ingest_runs": conn.execute("SELECT COUNT(*) AS n FROM ingest_runs").fetchone()["n"],
+            "cves": count("SELECT COUNT(*) AS n FROM cves"),
+            "kev": count("SELECT COUNT(*) AS n FROM cves WHERE kev = 1"),
+            "patch_checked": count("SELECT COUNT(*) AS n FROM cves WHERE patch_checked_at IS NOT NULL"),
+            "pending": count("SELECT COUNT(*) AS n FROM ingest_pending"),
+            "events": count("SELECT COUNT(*) AS n FROM events WHERE is_test = 0"),
+            "ingest_runs": count("SELECT COUNT(*) AS n FROM ingest_runs"),
             "last_run": {**dict(last), "counts": json.loads(last["counts_json"])} if last else None,
         }
     finally:
         conn.close()
 
 
-@app.get("/api/cves",response_model=list[Cve], response_model_exclude_none=True)
-def list_cves():
-    return fixtures.CVES
+_STATUS_RANK = {"urgent": 0, "high": 1, "watch": 2}
+
+
+@app.get("/api/cves", response_model=list[Cve], response_model_exclude_none=True)
+def list_cves(limit: int = Query(500, ge=1, le=5000)):
+    """Tracked CVEs, urgent first, then high, then newest."""
+    conn = db.connect()
+    try:
+        rows = conn.execute(
+            """SELECT id, title, description, vendor, product, cwes_json, date_published, cvss, severity,
+                      kev, patch_status
+               FROM cves WHERE state = 'PUBLISHED'"""
+        ).fetchall()
+    finally:
+        conn.close()
+
+    cves = []
+    for r in rows:
+        kev = r["kev"] == 1
+        cves.append(
+            {
+                "id": r["id"],
+                "description": triage.summary(r["title"], r["description"]),
+                "severity": r["severity"] if r["severity"] in ("critical", "high", "medium", "low") else "unknown",
+                "status": triage.status(kev, r["patch_status"], r["cwes_json"], r["description"], r["cvss"]),
+                "kev": kev,
+                "patch_status": r["patch_status"] or "unknown",
+                "cvss": r["cvss"],
+                "product": triage.product(r["vendor"], r["product"]),
+                "published": r["date_published"],
+            }
+        )
+    cves.sort(key=lambda c: c["published"] or "", reverse=True)
+    cves.sort(key=lambda c: _STATUS_RANK[c["status"]])
+    return cves[:limit]
+
+
+_EVENT_FIELDS = [f for f in AttackEvent.model_fields]
 
 
 @app.get("/api/events", response_model=list[AttackEvent], response_model_exclude_none=True)
 def list_events(limit: int = Query(1000, ge=1, le=5000)):
-    return fixtures.EVENTS[:limit]
+    """Real honeypot hits, newest first. Our own test traffic (is_test) is never returned."""
+    conn = db.connect()
+    try:
+        rows = conn.execute(
+            f"SELECT {', '.join(_EVENT_FIELDS)} FROM events WHERE is_test = 0 ORDER BY timestamp DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    finally:
+        conn.close()
+    # AS0 is the reserved "no ASN" value (RFC 7607): used until the lookup resolves an address.
+    return [{**dict(r), "asn": r["asn"] or 0} for r in rows]
 
 
 @app.get("/api/stats", response_model=Stats, response_model_exclude_none=True)
 def get_stats(window: str = "24h"):
-    return fixtures.STATS
+    since = _cutoff(window)
+    conn = db.connect()
+    try:
+        changes = dict(
+            (r["kind"], r["n"])
+            for r in conn.execute(
+                "SELECT kind, COUNT(DISTINCT cve_id) AS n FROM cve_changes WHERE at >= ? GROUP BY kind", (since,)
+            )
+        )
+        hits = conn.execute(
+            "SELECT COUNT(*) AS n FROM events WHERE is_test = 0 AND timestamp >= ?", (since,)
+        ).fetchone()["n"]
+    finally:
+        conn.close()
+    return {
+        "new_cves": changes.get("new", 0),
+        "updated_cves": changes.get("updated", 0),
+        "newly_patched": changes.get("patched", 0),
+        "newly_kev": changes.get("kev", 0),
+        "total_hits": hits,
+        "window": window,
+    }
 
 
 @app.get("/api/actors", response_model=list[Actor], response_model_exclude_none=True)
 def list_actors():
-    return fixtures.ACTORS
+    """Attacker dossiers: hits grouped by actor_id (assigned by the clustering step, Phase 5)."""
+    conn = db.connect()
+    try:
+        rows = conn.execute(
+            """SELECT actor_id, source_ip, asn, country_code, classification, cve_id, timestamp
+               FROM events WHERE is_test = 0 AND actor_id IS NOT NULL"""
+        ).fetchall()
+    finally:
+        conn.close()
+
+    groups: dict[str, list] = defaultdict(list)
+    for r in rows:
+        groups[r["actor_id"]].append(r)
+    actors = []
+    for actor_id, hits in groups.items():
+        times = sorted(h["timestamp"] for h in hits)
+        actors.append(
+            {
+                "id": actor_id,
+                "label": actor_id.upper().replace("_", "-"),
+                "ips": sorted({h["source_ip"] for h in hits}),
+                "asns": sorted({h["asn"] for h in hits if h["asn"]}),
+                "classification": "targeted" if any(h["classification"] == "targeted" for h in hits) else "noise",
+                "hit_count": len(hits),
+                "first_seen": times[0],
+                "last_seen": times[-1],
+                "countries": sorted({h["country_code"] for h in hits if h["country_code"]}) or None,
+                "cves": sorted({h["cve_id"] for h in hits if h["cve_id"]}) or None,
+            }
+        )
+    actors.sort(key=lambda a: a["last_seen"], reverse=True)
+    return actors

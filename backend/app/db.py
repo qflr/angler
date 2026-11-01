@@ -74,6 +74,33 @@ CREATE TABLE IF NOT EXISTS ingest_runs (
     counts_json TEXT
 );
 
+-- Honeypot hits (Phase 4 writes these). Columns mirror the /api/events contract plus raw capture.
+CREATE TABLE IF NOT EXISTS events (
+    id             TEXT PRIMARY KEY,
+    source_ip      TEXT NOT NULL,
+    asn            INTEGER,
+    port           INTEGER NOT NULL,
+    timestamp      TEXT NOT NULL,
+    classification TEXT NOT NULL,
+    org            TEXT,
+    country        TEXT,
+    country_code   TEXT,
+    region         TEXT,
+    city           TEXT,
+    lat            REAL,
+    lng            REAL,
+    cve_id         TEXT,
+    method         TEXT,
+    path           TEXT,
+    stage          TEXT,
+    actor_id       TEXT,
+    user_agent     TEXT,
+    headers_json   TEXT,
+    body_preview   TEXT,
+    is_test        INTEGER NOT NULL DEFAULT 0  -- our own test traffic; never shown on the dashboard
+);
+CREATE INDEX IF NOT EXISTS events_timestamp ON events (timestamp);
+
 CREATE TABLE IF NOT EXISTS state (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -131,11 +158,16 @@ class Conn:
             self.raw.commit()
 
 
+_schema_ready: set[str] = set()
+
+
 def _connect_pg() -> Conn:
     import psycopg
     from psycopg.rows import dict_row
 
     raw = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    if "pg" in _schema_ready:
+        return Conn(raw, pg=True)
     raw.execute("SELECT pg_advisory_lock(%s)", (_SCHEMA_LOCK,))
     raw.execute(SCHEMA.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY"))
     for table, cols in LATE_COLUMNS.items():
@@ -143,6 +175,7 @@ def _connect_pg() -> Conn:
             raw.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {name} {decl}")
     raw.execute("SELECT pg_advisory_unlock(%s)", (_SCHEMA_LOCK,))
     raw.commit()
+    _schema_ready.add("pg")
     return Conn(raw, pg=True)
 
 
@@ -150,8 +183,11 @@ def connect(path: Path | str | None = None) -> Conn:
     """Postgres if DATABASE_URL is set and no explicit SQLite path is given, else SQLite."""
     if DATABASE_URL and path is None:
         return _connect_pg()
-    raw = sqlite3.connect(path or DB_PATH, timeout=30)
+    target = str(path or DB_PATH)
+    raw = sqlite3.connect(target, timeout=30)
     raw.row_factory = sqlite3.Row
+    if target in _schema_ready:
+        return Conn(raw, pg=False)
     raw.execute("PRAGMA journal_mode=WAL")
     raw.executescript(SCHEMA)
     for table, cols in LATE_COLUMNS.items():
@@ -160,6 +196,7 @@ def connect(path: Path | str | None = None) -> Conn:
             if name not in have:
                 raw.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
     raw.commit()
+    _schema_ready.add(target)
     return Conn(raw, pg=False)
 
 

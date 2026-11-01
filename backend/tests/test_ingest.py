@@ -150,3 +150,11 @@ def test_every_sql_statement_translates_cleanly():
 
     src = "".join(p.read_text() for p in pathlib.Path("app").rglob("*.py") if p.name != "db.py")
     assert "strftime(" not in src.replace("datetime", "").replace(".strftime(", "")
+
+
+def test_no_control_characters_in_source():
+    import pathlib
+
+    for f in pathlib.Path("app").rglob("*.py"):
+        text = f.read_text(encoding="utf-8")
+        assert not [c for c in text if ord(c) < 32 and c not in "\n\r\t"], f"control character in {f}"

@@ -18,13 +18,10 @@ Point the frontend at it with `VITE_API_URL=http://localhost:8000` in `frontend/
 
 ## Data source
 
-`ANGLER_DATA_SOURCE` decides where responses come from, and every `/api/*` response echoes it in the
-`X-Angler-Data-Source` header so nobody mistakes placeholder data for real data.
-
-| value | meaning |
-|---|---|
-| `fixture` | Phase 0 default. One static example record per endpoint, copied from the contract. Not traffic. |
-| `db` | Phase 3+. Real CVEs from the pipeline and real hits from the honeypot. Empty until something real arrives. |
+Every `/api/*` response is read from the pipeline database (header `X-Angler-Data-Source: db`).
+There are no fixtures: with no honeypot hits yet, `/api/events` and `/api/actors` are empty lists and
+`total_hits` is 0. CVE `status` comes from the documented rules in `app/triage.py`; `severity` and
+`patch_status` are `"unknown"` when no source has an answer.
 
 ## Deploy (Blueprint)
 

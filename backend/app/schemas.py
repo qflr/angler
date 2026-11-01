@@ -15,10 +15,10 @@ SourceTag = Literal["tor", "vpn", "cloud", "residential", "scanner"]
 class Cve(BaseModel):
     id: str
     description: str
-    severity: Literal["critical", "high", "medium", "low"]
+    severity: Literal["critical", "high", "medium", "low", "unknown"]
     status: Literal["urgent", "high", "watch"]
     kev: bool
-    patch_status: Literal["patched", "partial", "unpatched"]
+    patch_status: Literal["patched", "partial", "unpatched", "unknown"]
     cvss: Optional[float] = None
     product: Optional[str] = None
     published: Optional[str] = None
