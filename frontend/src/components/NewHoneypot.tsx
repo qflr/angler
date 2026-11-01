@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { CVE_PATTERN, createHoneypot, getHoneypot, publishHoneypot } from '../data/honeypot';
 import type { HoneypotJob, HoneypotStatus } from '../data/types';
 import { SiteFooter } from './SiteFooter';
+import { AutoFeed } from './AutoFeed';
+import { MODE } from '../data/mode';
 
 const POLL_MS = 800;
 // Lets the button's press animation play before the view changes.
@@ -79,6 +81,8 @@ export function NewHoneypot({ onViewDashboard }: { onViewDashboard: () => void }
   const [publishing, setPublishing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  // Demo auto mode publishes on its own once the build is ready.
+  const [auto, setAuto] = useState(false);
 
   const running = job && !['ready', 'published', 'failed'].includes(job.status);
   const locked = !!job || starting;
@@ -94,9 +98,23 @@ export function NewHoneypot({ onViewDashboard }: { onViewDashboard: () => void }
     return () => clearTimeout(id);
   }, [job, running]);
 
+  useEffect(() => {
+    if (!auto || job?.status !== 'ready') return;
+    publishHoneypot(job.id).then(setJob, (e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [auto, job]);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = cve.trim().toUpperCase();
+    await start(cve);
+  };
+
+  const autoPick = (id: string) => {
+    setAuto(true);
+    start(id);
+  };
+
+  const start = async (raw: string) => {
+    const id = raw.trim().toUpperCase();
     if (!CVE_PATTERN.test(id)) {
       setError('Enter a CVE ID like CVE-2024-3400.');
       return;
@@ -177,6 +195,7 @@ export function NewHoneypot({ onViewDashboard }: { onViewDashboard: () => void }
           )}
         </form>
         {error && <p className="flow-error">{error}</p>}
+        {MODE === 'demo' && !job && !starting && <AutoFeed onPick={autoPick} />}
 
         {job && (
           <ol className="pipeline">
