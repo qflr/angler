@@ -23,6 +23,8 @@ LOCATION = os.getenv("GEMINI_LOCATION", "global")
 # Scanner paths often carry a query string, so "?" is allowed; still no "..", spaces or control characters.
 _PATH = re.compile(r"^/[A-Za-z0-9._~!$&'()*+,;=:@%/?-]{0,159}$")
 _TYPES = {"text/plain", "text/html", "application/json"}
+# These bodies are served from the live decoy; nothing that could run script in a visitor's browser.
+_ACTIVE = re.compile(r"<\s*(script|iframe|object|embed)|javascript:|\bon\w+\s*=", re.I)
 
 
 class ProfileError(Exception):
@@ -102,7 +104,7 @@ def validate(cve_id: str, raw: dict) -> dict:
             raise ProfileError("Gemini returned a profile with a bad status code.")
         if content_type not in _TYPES:
             raise ProfileError("Gemini returned a profile with a content type this decoy will not keep.")
-        if not isinstance(body, str) or "\x00" in body or len(body) > 200:
+        if not isinstance(body, str) or "\x00" in body or len(body) > 200 or _ACTIVE.search(body):
             raise ProfileError("Gemini returned a profile body this decoy will not keep.")
         cleaned.append({"path": path, "status": status, "content_type": content_type, "body": body})
     return {"summary": summary.strip(), "responses": cleaned}

@@ -259,10 +259,13 @@ def ingest_events(hits: list[dict] = Body(...), x_ingest_key: str = Header("")):
             except ValueError:
                 h["is_test"] = True
         geo = geoip.lookup(conn, [h["source_ip"] for h in hits if not h.get("is_test")])
+        profiles = honeypots.active_profiles()
         stored = 0
         with conn:
             for h in hits:
-                verdict = classify.classify(h.get("method", ""), h.get("path", ""), h.get("body_preview", ""), h.get("headers"))
+                verdict = classify.classify(
+                    h.get("method", ""), h.get("path", ""), h.get("body_preview", ""), h.get("headers"), profiles=profiles
+                )
                 g = geo.get(h["source_ip"], {})
                 cur = conn.execute(
                     """INSERT INTO events (id, source_ip, asn, port, timestamp, classification, org, country,
@@ -369,3 +372,11 @@ def explain_traffic(payload: dict = Body(...)):
         return insights.explain(events, payload.get("actors") or [], str(payload.get("scope") or "All traffic")[:80])
     except insights.InsightError as e:
         raise HTTPException(503, str(e))
+
+
+@app.get("/ingest/profiles")
+def sensor_profiles(x_ingest_key: str = Header("")):
+    """Generated decoy profiles for the sensor to serve (static responses only)."""
+    if not INGEST_KEY or not hmac.compare_digest(x_ingest_key, INGEST_KEY):
+        raise HTTPException(401, "bad ingest key")
+    return honeypots.active_profiles()

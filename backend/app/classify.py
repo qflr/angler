@@ -50,7 +50,10 @@ PROBE_TEXT = re.compile(
 )
 
 
-def classify(method: str, path: str, body: str, headers: dict | None = None, decoy_cves: set | None = None) -> dict:
+def classify(
+    method: str, path: str, body: str, headers: dict | None = None, decoy_cves: set | None = None,
+    profiles: list[dict] | None = None,
+) -> dict:
     """Returns {classification, stage, cve_id}."""
     decoy_cves = DECOY_CVES if decoy_cves is None else decoy_cves
     raw = f"{path}\n{body}"
@@ -58,6 +61,13 @@ def classify(method: str, path: str, body: str, headers: dict | None = None, dec
     header_text = " ".join(f"{k}: {v}" for k, v in (headers or {}).items())
     haystack = f"{raw}\n{decoded}\n{header_text}"
     payload = bool(PAYLOAD_TEXT.search(f"{decoded}\n{header_text}"))
+
+    # Paths served by a generated decoy profile belong to that profile's CVE.
+    req_path = path.split("?", 1)[0]
+    for prof in profiles or []:
+        for r in prof["responses"]:
+            if r["path"].split("?", 1)[0] == req_path and req_path != "/":
+                return {"classification": "targeted", "stage": "exploit" if payload else "probe", "cve_id": prof["cve_id"]}
 
     for cve_id, _, sig in _COMPILED:
         if sig.search(haystack):

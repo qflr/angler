@@ -3,7 +3,8 @@
 Each stage is real work, and a job that can't honestly finish fails with the reason:
 
     researching  load the CVE record (pull it from cvelistV5 if we don't track it) + KEV + patch status
-    building     prebuilt CVEs continue; any other CVE gets a Gemini profile and stays failed
+    building     prebuilt CVEs continue; any other CVE gets a validated Gemini profile (static paths and
+                 responses, no code) that the decoy starts serving
     containing   health-check the sandboxed decoy: it answers with the vulnerable banner
     ready        waits for the user to publish
     published    returns the live decoy URL; hits for this CVE are tagged targeted
@@ -137,7 +138,7 @@ def _advisory_text(job_id: str) -> str:
 
 
 def build(job_id: str, cve_id: str) -> bool:
-    """Prebuilt CVEs move on to the live decoy. Anything else gets a Gemini profile and stays failed."""
+    """Prebuilt CVEs use the hand-built profiles. Anything else gets a validated Gemini profile installed."""
     if cve_id in classify.DECOY_CVES:
         _set(job_id, status="containing")
         return True
@@ -148,8 +149,9 @@ def build(job_id: str, cve_id: str) -> bool:
     except llm.ProfileError as e:
         fail(job_id, str(e))
         return False
-    fail(job_id, llm.render(cve_id, profile))
-    return False
+    save_profile(cve_id, profile)  # validated static data; the sensor picks it up within ~30 s
+    _set(job_id, status="containing")
+    return True
 
 
 def contain(job_id: str) -> bool:
@@ -194,3 +196,24 @@ def list_published() -> list[dict]:
             seen.add(r["cve_id"])
             out.append(view(dict(r)))
     return out
+
+
+def save_profile(cve_id: str, profile: dict) -> None:
+    conn = db.connect()
+    with conn:
+        conn.execute(
+            """INSERT INTO decoy_profiles (cve_id, summary, responses_json, created_at) VALUES (?, ?, ?, ?)
+               ON CONFLICT (cve_id) DO UPDATE SET summary = excluded.summary,
+                   responses_json = excluded.responses_json, created_at = excluded.created_at""",
+            (cve_id, profile["summary"], json.dumps(profile["responses"]), db.now_iso()),
+        )
+    conn.close()
+
+
+def active_profiles() -> list[dict]:
+    conn = db.connect()
+    try:
+        rows = conn.execute("SELECT cve_id, summary, responses_json FROM decoy_profiles").fetchall()
+    finally:
+        conn.close()
+    return [{"cve_id": r["cve_id"], "summary": r["summary"], "responses": json.loads(r["responses_json"])} for r in rows]
