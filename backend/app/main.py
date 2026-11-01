@@ -7,7 +7,7 @@ means empty lists and zero counts, never placeholders.
 import json
 import os
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
 import hmac
@@ -207,6 +207,38 @@ def list_actors(cve_id: str | None = None):
     """Attacker dossiers: IPs clustered into actors by shared payloads, infrastructure and identity."""
     dossiers = actors.current()[1]
     return [a for a in dossiers if cve_id in (a.get("cves") or [])] if cve_id else dossiers
+
+
+@app.get("/api/actors/{actor_id}")
+def get_actor(actor_id: str):
+    """One attacker dossier plus everything it sent us: requests, payloads, user agents, download URLs."""
+    ip_to_actor, dossiers = actors.current()
+    dossier = next((a for a in dossiers if a["id"] == actor_id), None)
+    if not dossier:
+        raise HTTPException(404, "no such actor")
+    ips = [ip for ip, a in ip_to_actor.items() if a == actor_id]
+    conn = db.connect()
+    try:
+        marks = ",".join("?" * len(ips))
+        rows = conn.execute(
+            f"""SELECT e.id, e.source_ip, e.port, e.timestamp, e.method, e.path, e.body_preview, e.user_agent,
+                       e.cve_id, e.stage, e.classification, e.org, e.city, e.country
+                FROM events e WHERE e.is_test = 0 AND e.source_ip IN ({marks})
+                ORDER BY e.timestamp DESC LIMIT 200""",
+            ips,
+        ).fetchall()
+    finally:
+        conn.close()
+    hits = [dict(r) for r in rows]
+    text = " ".join(f"{h['path']} {h['body_preview']}" for h in hits)
+    downloads = sorted(set(re.findall(r"(?:https?|tftp|ftp)://[^\s'\"`;)<>|]+", text)))[:20]
+    return {
+        **dossier,
+        "user_agents": sorted({h["user_agent"] for h in hits if h["user_agent"]})[:10],
+        "paths": [{"path": p, "count": n} for p, n in Counter(h["path"] for h in hits).most_common(15)],
+        "download_urls": downloads,
+        "hits": hits,
+    }
 
 
 @app.post("/ingest/events")
