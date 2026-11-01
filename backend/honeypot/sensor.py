@@ -94,7 +94,8 @@ def profile_puller() -> None:
                     p, st, ct, b = r.get("path"), r.get("status"), r.get("content_type"), r.get("body", "")
                     if (isinstance(p, str) and p.startswith("/") and ".." not in p and isinstance(st, int)
                             and 200 <= st <= 599 and ct in _ALLOWED_TYPES and isinstance(b, str) and len(b) <= 200):
-                        routes[p.split("?", 1)[0]] = (st, b.encode(), ct)
+                        routes[p] = (st, b.encode(), ct)  # exact path + query
+                        routes.setdefault(p.split("?", 1)[0], (st, b.encode(), ct))  # bare path: first wins
             _profile_routes = routes
         except Exception as e:  # API down: keep serving the last good set
             print(f"profile pull failed: {e}", flush=True)
@@ -107,7 +108,7 @@ def route(method: str, raw_path: str, body: str) -> tuple[int, bytes, str]:
     html, text = "text/html; charset=UTF-8", "text/plain"
 
     # Generated profiles (build agent): exact static bytes the API validated. Nothing is evaluated.
-    hit = _profile_routes.get(path)
+    hit = _profile_routes.get(raw_path) or _profile_routes.get(path)
     if hit:
         return hit
 
