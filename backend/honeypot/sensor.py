@@ -1,4 +1,4 @@
-"""Angler decoy sensor: impersonates a Windows XAMPP box (Apache + PHP-CGI, the CVE-2024-4577 target).
+"""Angler decoy sensor: looks like an unpatched Apache 2.4.49 + PHP 8.1 + PHPUnit box (high-volume targets).
 
 Low-interaction by design. It logs every request and answers with static pages. It never runs,
 evaluates, fetches or stores-and-serves anything an attacker sends, so there is nothing to exploit.
@@ -11,8 +11,10 @@ in a local spool file and are retried, so nothing captured is lost.
 """
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import ssl
 import threading
 import time
@@ -27,18 +29,76 @@ SPOOL = os.getenv("ANGLER_SPOOL", "/var/lib/angler/spool.jsonl")
 MAX_BODY = 4096  # bytes of request body kept for analysis; the rest is read and discarded
 FLUSH_SECONDS = 2
 
-SERVER_HEADER = "Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12"
+# Apache 2.4.49 is the exact build hit by CVE-2021-41773, and PHP 8.1.10 predates the CVE-2024-4577 fix:
+# a banner that version-matching scanners flag as vulnerable on sight.
+SERVER_HEADER = "Apache/2.4.49 (Unix) OpenSSL/1.1.1k PHP/8.1.10"
 INDEX = b"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Welcome to XAMPP</title></head>
-<body><h1>Welcome to XAMPP for Windows 8.2.12</h1>
+<body><h1>Welcome to XAMPP 8.1.10</h1>
 <p>You have successfully installed XAMPP on this system! Now you can start using Apache, MariaDB,
 PHP and other components.</p><p><a href="/dashboard/">Dashboard</a> | <a href="/phpmyadmin/">phpMyAdmin</a></p>
 </body></html>"""
+# Static fake: no real accounts, served only so traversal scanners believe they got through.
+FAKE_PASSWD = b"""root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+mysql:x:27:27:MariaDB Server:/var/lib/mysql:/sbin/nologin
+"""
 NOT_FOUND = b"""<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
 <html><head><title>404 Not Found</title></head><body><h1>Not Found</h1>
 <p>The requested URL was not found on this server.</p><hr>
-<address>Apache/2.4.58 (Win64) OpenSSL/3.1.3 PHP/8.2.12 Server at localhost Port 80</address>
+<address>Apache/2.4.49 (Unix) OpenSSL/1.1.1k PHP/8.1.10 Server at localhost Port 80</address>
 </body></html>"""
+
+# --- emulation ---------------------------------------------------------------------------------
+# Probes usually check for a tell-tale output (md5 of a marker, an echoed string, `id`) before
+# sending the real payload. We fake those outputs with regexes and hashlib. Nothing is executed.
+
+_MD5 = re.compile(r"md5\(\s*['\"]([^'\"]{1,128})['\"]\s*\)")
+_ECHO = re.compile(r"(?:echo|print)\s*\(?\s*['\"]([^'\"]{1,256})['\"]")
+_TRAVERSAL = re.compile(r"/(cgi-bin|icons)/(\.|%2e|%%32%65)+(%2e|\.)?/", re.I)
+_PHP_CGI = re.compile(r"allow_url_include|auto_prepend_file|php-cgi", re.I)
+
+
+def fake_output(code: str) -> str:
+    """What a vulnerable box would print for common probe payloads, computed without running them."""
+    out = [hashlib.md5(m.encode()).hexdigest() for m in _MD5.findall(code)]
+    out += [m for m in _ECHO.findall(code) if "Content-Type" not in m and m.strip()]
+    if re.search(r"(^|[;|&`\s])id(\s|;|$)", code):
+        out.append("uid=1(daemon) gid=1(daemon) groups=1(daemon)")
+    if re.search(r"\buname\b", code):
+        out.append("Linux web01 5.4.0-150-generic #167-Ubuntu SMP x86_64 GNU/Linux")
+    if re.search(r"\bwhoami\b", code):
+        out.append("daemon")
+    return "\n".join(out)
+
+
+def route(method: str, raw_path: str, body: str) -> tuple[int, bytes, str]:
+    """Pick a believable static response. Returns (status, body, content type)."""
+    path = raw_path.split("?", 1)[0]
+    html, text = "text/html; charset=UTF-8", "text/plain"
+
+    # CVE-2023-1389, TP-Link Archer AX21 locale injection (Mirai's favourite).
+    if path.startswith("/cgi-bin/luci/") and "locale" in raw_path:
+        return 200, b'{"success":true,"data":{"country":"US"}}', "application/json"
+    # CVE-2017-9841, PHPUnit eval-stdin.php: body is PHP; vulnerable boxes print its output.
+    if path.endswith("eval-stdin.php"):
+        return 200, fake_output(body).encode(), html
+    # CVE-2021-41773 / CVE-2021-42013, Apache 2.4.49/50 path traversal and CGI RCE.
+    if _TRAVERSAL.search(raw_path):
+        if method == "POST" or "/bin/sh" in raw_path:
+            return 200, fake_output(body).encode(), text
+        if "passwd" in raw_path:
+            return 200, FAKE_PASSWD, text
+        return 403, NOT_FOUND, html
+    # CVE-2024-4577, PHP-CGI argument injection: auto_prepend_file=php://input runs the body.
+    if _PHP_CGI.search(raw_path):
+        return 200, (fake_output(body) + "\n").encode() + INDEX, html
+    if path in ("/", "/index.php", "/dashboard/"):
+        return 200, INDEX, html
+    return 404, NOT_FOUND, html
+
 
 _lock = threading.Lock()
 _buffer: list[dict] = []
@@ -53,7 +113,7 @@ class Decoy(BaseHTTPRequestHandler):
     def log_message(self, *args):  # silence stderr access log; we keep our own
         pass
 
-    def _capture(self) -> None:
+    def _capture(self) -> str:
         length = int(self.headers.get("Content-Length") or 0)
         body = b""
         if length > 0:
@@ -78,17 +138,14 @@ class Decoy(BaseHTTPRequestHandler):
         }
         with _lock:
             _buffer.append(hit)
+        return hit["body_preview"]
 
     def _respond(self) -> None:
-        self._capture()
-        path = self.path.split("?", 1)[0]
-        if path in ("/", "/index.php", "/dashboard/"):
-            status, body = 200, INDEX
-        else:
-            status, body = 404, NOT_FOUND
+        body_text = self._capture()
+        status, body, ctype = route(self.command, self.path, body_text)
         self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=UTF-8")
-        self.send_header("X-Powered-By", "PHP/8.2.12")
+        self.send_header("Content-Type", ctype)
+        self.send_header("X-Powered-By", "PHP/8.1.10")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         if self.command != "HEAD":

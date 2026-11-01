@@ -37,6 +37,29 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+def reclassify_events() -> None:
+    """Re-run the classifier over stored hits so signature updates apply to history too."""
+    try:
+        conn = db.connect()
+    except Exception as e:  # never block startup on this
+        print(f"reclassify skipped: {e}")
+        return
+    try:
+        rows = conn.execute("SELECT id, method, path, body_preview, headers_json FROM events").fetchall()
+        with conn:
+            for r in rows:
+                v = classify.classify(r["method"] or "", r["path"] or "", r["body_preview"] or "",
+                                      json.loads(r["headers_json"] or "{}"))
+                conn.execute(
+                    "UPDATE events SET classification = :classification, stage = :stage, cve_id = :cve_id WHERE id = :id",
+                    {**v, "id": r["id"]},
+                )
+        print(f"reclassified {len(rows)} events")
+    finally:
+        conn.close()
+
+
 @app.middleware("http")
 async def tag_data_source(request, call_next):
     response = await call_next(request)

