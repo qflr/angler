@@ -16,7 +16,7 @@ import ipaddress
 from fastapi import Body, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import classify, db, geoip, honeypots, triage
+from . import actors, classify, db, geoip, honeypots, triage
 from .schemas import Actor, AttackEvent, Cve, Stats
 
 # Shared secret the honeypot sensor sends in X-Ingest-Key. Unset = ingest disabled.
@@ -38,6 +38,11 @@ app.add_middleware(
     allow_headers=["Content-Type"],
     expose_headers=["X-Angler-Data-Source"],
 )
+
+
+@app.on_event("startup")
+def load_reference_lists() -> None:
+    actors.refresh_lists_in_background()
 
 
 @app.on_event("startup")
@@ -164,7 +169,8 @@ def list_events(limit: int = Query(1000, ge=1, le=5000)):
     finally:
         conn.close()
     # AS0 is the reserved "no ASN" value (RFC 7607): used until the lookup resolves an address.
-    return [{**dict(r), "asn": r["asn"] or 0} for r in rows]
+    ip_to_actor = actors.current()[0]
+    return [{**dict(r), "asn": r["asn"] or 0, "actor_id": ip_to_actor.get(r["source_ip"])} for r in rows]
 
 
 @app.get("/api/stats", response_model=Stats, response_model_exclude_none=True)
@@ -195,38 +201,8 @@ def get_stats(window: str = "24h"):
 
 @app.get("/api/actors", response_model=list[Actor], response_model_exclude_none=True)
 def list_actors():
-    """Attacker dossiers: hits grouped by actor_id (assigned by the clustering step, Phase 5)."""
-    conn = db.connect()
-    try:
-        rows = conn.execute(
-            """SELECT actor_id, source_ip, asn, country_code, classification, cve_id, timestamp
-               FROM events WHERE is_test = 0 AND actor_id IS NOT NULL"""
-        ).fetchall()
-    finally:
-        conn.close()
-
-    groups: dict[str, list] = defaultdict(list)
-    for r in rows:
-        groups[r["actor_id"]].append(r)
-    actors = []
-    for actor_id, hits in groups.items():
-        times = sorted(h["timestamp"] for h in hits)
-        actors.append(
-            {
-                "id": actor_id,
-                "label": actor_id.upper().replace("_", "-"),
-                "ips": sorted({h["source_ip"] for h in hits}),
-                "asns": sorted({h["asn"] for h in hits if h["asn"]}),
-                "classification": "targeted" if any(h["classification"] == "targeted" for h in hits) else "noise",
-                "hit_count": len(hits),
-                "first_seen": times[0],
-                "last_seen": times[-1],
-                "countries": sorted({h["country_code"] for h in hits if h["country_code"]}) or None,
-                "cves": sorted({h["cve_id"] for h in hits if h["cve_id"]}) or None,
-            }
-        )
-    actors.sort(key=lambda a: a["last_seen"], reverse=True)
-    return actors
+    """Attacker dossiers: IPs clustered into actors by shared payloads, infrastructure and identity."""
+    return actors.current()[1]
 
 
 @app.post("/ingest/events")

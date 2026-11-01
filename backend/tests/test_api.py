@@ -32,9 +32,10 @@ def seeded(tmp_path, monkeypatch):
         db.upsert_cve(conn, cvelist.parse_record(unscored), "updated")
         conn.execute("UPDATE cves SET kev = 1, patch_status = 'patched' WHERE id = 'CVE-2026-0001'")
         for i, (ip, test) in enumerate([("203.0.113.5", 0), ("203.0.113.6", 0), ("127.0.0.1", 1)]):
+            # Same /24 and same User-Agent: the clustering should fold both IPs into one actor.
             conn.execute(
-                """INSERT INTO events (id, source_ip, asn, port, timestamp, classification, actor_id, is_test)
-                   VALUES (?, ?, ?, 443, ?, ?, 'act_1', ?)""",
+                """INSERT INTO events (id, source_ip, asn, port, timestamp, classification, user_agent, is_test)
+                   VALUES (?, ?, ?, 443, ?, ?, 'botnet-x/1.0', ?)""",
                 (f"h{i}", ip, 64500 if i else None, db.now_iso(), "targeted" if i == 0 else "noise", test),
             )
     conn.close()
@@ -61,6 +62,8 @@ def test_endpoints_return_real_rows(seeded):
 
     actors = client.get("/api/actors").json()
     assert len(actors) == 1 and actors[0]["hit_count"] == 2 and actors[0]["classification"] == "targeted"
+    assert actors[0]["ips"] == ["203.0.113.5", "203.0.113.6"]
+    assert {e["actor_id"] for e in events} == {actors[0]["id"]}  # events link to their dossier
 
     for path, model in [("/api/cves", Cve), ("/api/events", AttackEvent), ("/api/actors", Actor)]:
         res = client.get(path)

